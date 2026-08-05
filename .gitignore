@@ -1,0 +1,5 @@
+.env
+rclone.conf
+data/
+*.log
+.DS_Store

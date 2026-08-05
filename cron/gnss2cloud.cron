@@ -1,0 +1,8 @@
+# gnss2cloud scheduled jobs (run by supercronic as the non-root 'gnss' user)
+# Standard 5-field cron syntax.
+
+5 * * * * /usr/local/bin/convert_hourly.sh
+10 * * * * /usr/local/bin/upload_hourly.sh
+30 2 * * * /usr/local/bin/retention_cleanup.sh
+*/5 * * * * /usr/local/bin/health_check.sh
+0 3 * * * /usr/local/bin/logrotate -s /data/logs/.logrotate-state /etc/gnss2cloud-logrotate.conf

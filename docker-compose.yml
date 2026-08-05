@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  gnss2cloud:
+    build:
+      context: .
+      args:
+        PUID: ${PUID:-1000}
+        PGID: ${PGID:-1000}
+    image: gnss2cloud:latest
+    container_name: gnss2cloud-${STATION_NAME:-station01}
+
+    devices:
+      - /dev/gnss0:/dev/gnss0
+
+    # Grants access to the host's dialout group so the container's 'gnss'
+    # user can open the serial device. Find your host's GID with:
+    #   getent group dialout
+    group_add:
+      - "${DIALOUT_GID}"
+
+    environment:
+      - GNSS_DEVICE=gnss0
+      - GNSS_BAUD=${GNSS_BAUD:-460800}
+      - STATION_NAME=${STATION_NAME:-station01}
+      - B2_REMOTE=${B2_REMOTE}
+      - STORM_REMOTE=${STORM_REMOTE}
+
+    volumes:
+      - ${DATA_DIR:-./data}/raw:/data/raw
+      - ${DATA_DIR:-./data}/rinex:/data/rinex
+      - ${DATA_DIR:-./data}/logs:/data/logs
+      - ${RCLONE_CONFIG:-./rclone.conf}:/home/gnss/.config/rclone/rclone.conf:ro
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
