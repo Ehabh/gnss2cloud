@@ -3,12 +3,11 @@ RAW_DIR="/data/raw"
 RINEX_DIR="/data/rinex"
 LOG_FILE="/data/logs/upload.log"
 
-# Set these in docker-compose.yml / .env - see .env.example
 : "${STATION_NAME:?STATION_NAME env var not set}"
-: "${B2_REMOTE:?B2_REMOTE env var not set}"      # e.g. b2:your-bucket
-: "${STORM_REMOTE:?STORM_REMOTE env var not set}" # e.g. storm:your-bucket
+: "${B2_REMOTE:?B2_REMOTE env var not set}"
+: "${STORM_REMOTE:?STORM_REMOTE env var not set}"
 
-REMOTES=("${B2_REMOTE}/${STATION_NAME}/" "${STORM_REMOTE}/${STATION_NAME}/")
+REMOTES=("${B2_REMOTE}" "${STORM_REMOTE}")
 
 upload_file() {
     local file="$1"
@@ -22,22 +21,20 @@ upload_file() {
     fi
 }
 
-# Self-healing sweep: checks every local raw/rinex file against both
-# remotes and uploads anything missing. A failure this run gets retried
-# automatically next run - no separate retry logic needed.
-for file in "$RAW_DIR"/*.ubx "$RINEX_DIR"/*.obs "$RINEX_DIR"/*.nav; do
-    [ -e "$file" ] || continue
-
+# Self-healing sweep across both raw/ and rinex/, recursing into the
+# YYYY/DDD subfolders created by convert_hourly.sh. Uploads mirror the
+# same YYYY/DDD structure into the cloud bucket, e.g.
+# b2:bucket/station01/2026/216/2026080411.obs
+find "$RAW_DIR" "$RINEX_DIR" -type f \( -name "*.ubx" -o -name "*.obs" -o -name "*.nav" \) -mmin +5 | while read -r file; do
     fname=$(basename "$file")
     hour="${fname%.*}"
     [[ "$hour" =~ ^[0-9]{10}$ ]] || continue
 
-    # skip files modified in the last 5 minutes (still being written)
-    if [ "$(find "$file" -mmin -5)" ]; then
-        continue
-    fi
+    year="${hour:0:4}"
+    doy=$(date -u -d "${hour:0:4}-${hour:4:2}-${hour:6:2}" +"%j")
 
-    for remote in "${REMOTES[@]}"; do
+    for base_remote in "${REMOTES[@]}"; do
+        remote="${base_remote}/${STATION_NAME}/${year}/${doy}/"
         exists=$(rclone lsf "$remote" --include "$fname" 2>/dev/null)
         if [ -z "$exists" ]; then
             upload_file "$file" "$remote"
