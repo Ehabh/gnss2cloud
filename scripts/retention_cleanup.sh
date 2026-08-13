@@ -4,8 +4,8 @@ RINEX_DIR="/data/rinex"
 LOG_FILE="/data/logs/retention.log"
 
 : "${STATION_NAME:?STATION_NAME env var not set}"
-: "${B2_REMOTE:?B2_REMOTE env var not set}"
-: "${STORM_REMOTE:?STORM_REMOTE env var not set}"
+: "${REMOTE_STORAGE_1:?REMOTE_STORAGE_1 env var not set}"
+: "${REMOTE_STORAGE_2:?REMOTE_STORAGE_2 env var not set}"
 
 MIN_AGE_HOURS="${MIN_AGE_HOURS:-24}"
 now_epoch=$(date -u +%s)
@@ -34,7 +34,7 @@ find "$RAW_DIR" -type f -name "*.ubx" | while read -r raw_file; do
     nav_file="$RINEX_DIR/$year/$doy/${hour}.nav"
     all_confirmed=true
 
-    for base_remote in "$B2_REMOTE" "$STORM_REMOTE"; do
+    for base_remote in "$REMOTE_STORAGE_1" "$REMOTE_STORAGE_2"; do
         remote="${base_remote}/${STATION_NAME}/${year}/${doy}"
         for f in "${hour}.ubx" "${hour}.obs" "${hour}.nav"; do
             if ! check_remote "$remote" "$f"; then
