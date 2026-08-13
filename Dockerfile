@@ -14,7 +14,7 @@ RUN curl https://rclone.org/install.sh | bash
 
 # --- supercronic: non-root cron replacement (no root daemon needed) ---
 ARG TARGETARCH
-ARG SUPERCRONIC_VERSION=v0.2.33
+ARG SUPERCRONIC_VERSION=v0.2.48
 RUN curl -fsSL -o /usr/local/bin/supercronic \
     "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}" \
     && chmod +x /usr/local/bin/supercronic
