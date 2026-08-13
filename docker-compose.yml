@@ -21,8 +21,8 @@ services:
       - GNSS_DEVICE=gnss0
       - GNSS_BAUD=${GNSS_BAUD:-460800}
       - STATION_NAME=${STATION_NAME:-station01}
-      - B2_REMOTE=${B2_REMOTE}
-      - STORM_REMOTE=${STORM_REMOTE}
+      - REMOTE_STORAGE_1=${REMOTE_STORAGE_1}
+      - REMOTE_STORAGE_2=${REMOTE_STORAGE_2}
 
     volumes:
       - ${DATA_DIR:-./data}/raw:/data/raw
