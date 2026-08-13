@@ -1,7 +1,7 @@
 FROM debian:bookworm-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git build-essential ca-certificates curl \
+    git build-essential ca-certificates curl unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
