@@ -4,10 +4,10 @@ RINEX_DIR="/data/rinex"
 LOG_FILE="/data/logs/upload.log"
 
 : "${STATION_NAME:?STATION_NAME env var not set}"
-: "${B2_REMOTE:?B2_REMOTE env var not set}"
-: "${STORM_REMOTE:?STORM_REMOTE env var not set}"
+: "${REMOTE_STORAGE_1:?REMOTE_STORAGE_1 env var not set}"
+: "${REMOTE_STORAGE_2:?REMOTE_STORAGE_2 env var not set}"
 
-REMOTES=("${B2_REMOTE}" "${STORM_REMOTE}")
+REMOTES=("${REMOTE_STORAGE_1}" "${REMOTE_STORAGE_2}")
 
 upload_file() {
     local file="$1"
