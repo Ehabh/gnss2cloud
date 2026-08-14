@@ -7,7 +7,20 @@ set -e
 # logging (and effectively scheduling) for up to ~45 minutes at a time.
 setsid supercronic /etc/gnss2cloud.cron \
     < /dev/null >> /data/logs/supercronic.log 2>&1 &
+
+# GNSS_FORMAT is optional. When unset, str2str auto-detects the stream
+# format (this is the original, tested behavior for u-blox receivers).
+# Set it to force a specific RTKLIB format token for non-u-blox
+# receivers, e.g. "nov" for NovAtel OEM4/OEM6/OEM7/OEMStar, or "sbf"
+# for Septentrio. See docs/receiver-setup.md.
+FORMAT_SUFFIX=""
+case "${GNSS_FORMAT:-}" in
+    nov) RAW_EXT="gps"; FORMAT_SUFFIX="#nov" ;;
+    sbf) RAW_EXT="sbf"; FORMAT_SUFFIX="#sbf" ;;
+    *)   RAW_EXT="ubx" ;;
+esac
+
 # str2str becomes the container's main (PID 1) process. If it exits,
 # Docker's restart policy (set in docker-compose.yml) brings it back.
-exec str2str -in serial://${GNSS_DEVICE}:${GNSS_BAUD} \
-    -out file:///data/raw/%Y%m%d%h.ubx::S=1
+exec str2str -in "serial://${GNSS_DEVICE}:${GNSS_BAUD}${FORMAT_SUFFIX}" \
+    -out "file:///data/raw/%Y%m%d%h.${RAW_EXT}::S=1"

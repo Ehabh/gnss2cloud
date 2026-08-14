@@ -16,9 +16,16 @@ check_remote() {
     rclone lsf "$remote" --include "$fname" 2>/dev/null | grep -q "^$fname$"
 }
 
-find "$RAW_DIR" -type f -name "*.ubx" | while read -r raw_file; do
+ case "${GNSS_FORMAT:-}" in
+     nov) RAW_EXT="gps" ;;
+     sbf) RAW_EXT="sbf" ;;
+     *)   RAW_EXT="ubx" ;;
+ esac
+
+
++ find "$RAW_DIR" -type f -name "*.${RAW_EXT}" | while read -r raw_file; do
     fname=$(basename "$raw_file")
-    hour="${fname%.ubx}"
+    hour="${fname%.${RAW_EXT}}"
     [[ "$hour" =~ ^[0-9]{10}$ ]] || continue
 
     year="${hour:0:4}"
@@ -36,7 +43,7 @@ find "$RAW_DIR" -type f -name "*.ubx" | while read -r raw_file; do
 
     for base_remote in "$REMOTE_STORAGE_1" "$REMOTE_STORAGE_2"; do
         remote="${base_remote}/${STATION_NAME}/${year}/${doy}"
-        for f in "${hour}.ubx" "${hour}.obs" "${hour}.nav"; do
+        for f in "${hour}.${RAW_EXT}" "${hour}.obs" "${hour}.nav"; do
             if ! check_remote "$remote" "$f"; then
                 all_confirmed=false
                 echo "$(date): Missing $f on $remote - will not delete $hour" >> "$LOG_FILE"

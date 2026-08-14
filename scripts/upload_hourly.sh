@@ -25,8 +25,12 @@ upload_file() {
 # YYYY/DDD subfolders created by convert_hourly.sh. Uploads mirror the
 # same YYYY/DDD structure into the cloud bucket, e.g.
 # b2:bucket/station01/2026/216/2026080411.obs
-find "$RAW_DIR" "$RINEX_DIR" -type f \( -name "*.ubx" -o -name "*.obs" -o -name "*.nav" \) -mmin +5 | while read -r file; do
-    fname=$(basename "$file")
+ case "${GNSS_FORMAT:-}" in
+     nov) RAW_EXT="gps" ;;
+     sbf) RAW_EXT="sbf" ;;
+     *)   RAW_EXT="ubx" ;;
+ esac
+ find "$RAW_DIR" "$RINEX_DIR" -type f \( -name "*.${RAW_EXT}" -o -name "*.obs" -o -name "*.nav" \) -mmin +5 | while read -r file; do    fname=$(basename "$file")
     hour="${fname%.*}"
     [[ "$hour" =~ ^[0-9]{10}$ ]] || continue
 

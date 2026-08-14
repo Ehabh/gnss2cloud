@@ -5,7 +5,19 @@ LOG_FILE="/data/logs/convert.log"
 
 # -u is required: str2str names files by UTC, not local time
 PREV_HOUR=$(date -u -d "-1 hour" +"%Y%m%d%H")
-RAW_FILE_FLAT="$RAW_DIR/${PREV_HOUR}.ubx"
+
+# GNSS_FORMAT is optional. When unset, this defaults to u-blox's raw
+# extension and lets convbin auto-detect the format (the original,
+# tested behavior). Set it to match GNSS_FORMAT in .env for non-u-blox
+# receivers. See docs/receiver-setup.md.
+FORMAT_ARGS=()
+case "${GNSS_FORMAT:-}" in
+    nov) RAW_EXT="gps"; FORMAT_ARGS=(-r nov) ;;
+    sbf) RAW_EXT="sbf"; FORMAT_ARGS=(-r sbf) ;;
+    *)   RAW_EXT="ubx" ;;
+esac
+
+RAW_FILE_FLAT="$RAW_DIR/${PREV_HOUR}.${RAW_EXT}"
 
 # str2str writes flat files (kept simple/proven at capture time). This
 # script reorganizes each closed hour into YYYY/DDD/ (year / day-of-year),
@@ -18,10 +30,10 @@ RINEX_DEST_DIR="$RINEX_DIR/$YEAR/$DOY"
 
 if [ -f "$RAW_FILE_FLAT" ]; then
     mkdir -p "$RAW_DEST_DIR" "$RINEX_DEST_DIR"
-    mv "$RAW_FILE_FLAT" "$RAW_DEST_DIR/${PREV_HOUR}.ubx"
-    RAW_FILE="$RAW_DEST_DIR/${PREV_HOUR}.ubx"
+    mv "$RAW_FILE_FLAT" "$RAW_DEST_DIR/${PREV_HOUR}.${RAW_EXT}"
+    RAW_FILE="$RAW_DEST_DIR/${PREV_HOUR}.${RAW_EXT}"
 
-    convbin "$RAW_FILE" -v 3.04 \
+    convbin "$RAW_FILE" -v 3.04 "${FORMAT_ARGS[@]}" \
         -o "$RINEX_DEST_DIR/${PREV_HOUR}.obs" \
         -n "$RINEX_DEST_DIR/${PREV_HOUR}.nav" \
         -g /dev/null \
