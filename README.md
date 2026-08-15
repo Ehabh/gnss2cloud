@@ -194,8 +194,9 @@ configuration differs.
 ## Acknowledgments
 
 Thanks to [Storm Developments](https://stormdevelopments.ca) and
-[Backblaze](https://www.backblaze.com) for their generous free-tier
-access to storage, used during this project's development and testing.
+[Backblaze](https://www.backblaze.com) for providing free-tier
+access to cloud storage, which helped in the development and testing
+of this project.
 
 ## License
 
