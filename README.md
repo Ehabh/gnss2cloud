@@ -191,6 +191,12 @@ configuration differs.
   NovAtel or Septentrio hardware has been run against this container.
   See `docs/receiver-setup.md`.
 
+## Acknowledgments
+
+Thanks to [Storm Developments](https://stormdevelopments.ca) and
+[Backblaze](https://www.backblaze.com) for their generous free-tier
+access to storage, used during this project's development and testing.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
