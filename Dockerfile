@@ -9,6 +9,12 @@ RUN git clone --depth 1 https://github.com/tomojitakasu/RTKLIB.git
 RUN cd /opt/RTKLIB/app/str2str/gcc && make
 RUN cd /opt/RTKLIB/app/convbin/gcc && make
 
+WORKDIR /opt
+RUN git clone --depth 1 https://github.com/satoshi-pes/RNXCMP.git
+RUN cd /opt/RNXCMP/source \
+    && gcc -O2 -o rnx2crx rnx2crx.c \
+    && gcc -O2 -o crx2rnx crx2rnx.c
+    
 # --- rclone (official static binary) ---
 RUN curl https://rclone.org/install.sh | bash
 
@@ -28,13 +34,15 @@ FROM debian:bookworm-slim
 # this only works because there's a single in-container user; see the
 # bare-metal README notes if adapting this for a multi-user host setup.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates logrotate \
+    ca-certificates logrotate zstd \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/RTKLIB/app/str2str/gcc/str2str /usr/local/bin/str2str
 COPY --from=builder /opt/RTKLIB/app/convbin/gcc/convbin /usr/local/bin/convbin
 COPY --from=builder /usr/bin/rclone /usr/local/bin/rclone
 COPY --from=builder /usr/local/bin/supercronic /usr/local/bin/supercronic
+COPY --from=builder /opt/RNXCMP/source/rnx2crx /usr/local/bin/rnx2crx
+COPY --from=builder /opt/RNXCMP/source/crx2rnx /usr/local/bin/crx2rnx
 
 # --- Non-root user. Override at build time with --build-arg if your host
 # user's UID/GID differ (check with `id` on the host) so bind-mounted
