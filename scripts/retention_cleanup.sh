@@ -23,7 +23,7 @@ check_remote() {
  esac
 
 
-+ find "$RAW_DIR" -type f -name "*.${RAW_EXT}" | while read -r raw_file; do
+find "$RAW_DIR" -type f -name "*.${RAW_EXT}" | while read -r raw_file; do
     fname=$(basename "$raw_file")
     hour="${fname%.${RAW_EXT}}"
     [[ "$hour" =~ ^[0-9]{10}$ ]] || continue
