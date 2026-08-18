@@ -23,9 +23,10 @@ check_remote() {
  esac
 
 
-+ find "$RAW_DIR" -type f -name "*.${RAW_EXT}" | while read -r raw_file; do
+find "$RAW_DIR" -type f -name "*.${RAW_EXT}.zst" | while read -r raw_file; do
     fname=$(basename "$raw_file")
-    hour="${fname%.${RAW_EXT}}"
+    hour="${fname%.*}"
+    hour="${hour%.*}"
     [[ "$hour" =~ ^[0-9]{10}$ ]] || continue
 
     year="${hour:0:4}"
@@ -37,13 +38,13 @@ check_remote() {
         continue
     fi
 
-    obs_file="$RINEX_DIR/$year/$doy/${hour}.obs"
-    nav_file="$RINEX_DIR/$year/$doy/${hour}.nav"
+    crx_file="$RINEX_DIR/$year/$doy/${hour}.crx.gz"
+    nav_file="$RINEX_DIR/$year/$doy/${hour}.nav.gz"
     all_confirmed=true
 
     for base_remote in "$REMOTE_STORAGE_1" "$REMOTE_STORAGE_2"; do
         remote="${base_remote}/${STATION_NAME}/${year}/${doy}"
-        for f in "${hour}.${RAW_EXT}" "${hour}.obs" "${hour}.nav"; do
+        for f in "${hour}.${RAW_EXT}.zst" "${hour}.crx.gz" "${hour}.nav.gz"; do
             if ! check_remote "$remote" "$f"; then
                 all_confirmed=false
                 echo "$(date): Missing $f on $remote - will not delete $hour" >> "$LOG_FILE"
@@ -52,7 +53,7 @@ check_remote() {
     done
 
     if [ "$all_confirmed" = true ]; then
-        rm -f "$raw_file" "$obs_file" "$nav_file"
+        rm -f "$raw_file" "$crx_file" "$nav_file"
         echo "$(date): Deleted local files for $hour (confirmed on both remotes)" >> "$LOG_FILE"
     fi
 done
