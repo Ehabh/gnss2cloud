@@ -5,8 +5,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
-RUN git clone --branch demo5 https://github.com/rtklibexplorer/RTKLIB.git \
-    && cd RTKLIB && git checkout 75a2e56275485b21a67bd35bc94bbeb8936e1a74
+RUN git clone --branch main https://github.com/rtklibexplorer/RTKLIB.git \
+    && cd RTKLIB && git checkout 3aedf054706095885e81e2f4adb7b34305c9200a
 RUN cd /opt/RTKLIB/app/consapp/str2str/gcc && make
 RUN cd /opt/RTKLIB/app/consapp/convbin/gcc && make
 
