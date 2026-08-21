@@ -30,8 +30,7 @@ upload_file() {
      sbf) RAW_EXT="sbf" ;;
      *)   RAW_EXT="ubx" ;;
  esac
- find "$RAW_DIR" "$RINEX_DIR" -type f \( -name "*.${RAW_EXT}.zst" -o -name "*.crx.gz" -o -name "*.nav.gz" \) -mmin +5 | while read -r file; do
-    fname=$(basename "$file")
+ find "$RAW_DIR" "$RINEX_DIR" -type f \( -name "*.${RAW_EXT}.zst" -o -name "*.crx.gz" -o -name "*.obs.gz" -o -name "*.nav.gz" \) -mmin +5 | while read -r file; do    fname=$(basename "$file")
     hour="${fname%.*}"
     hour="${hour%.*}"
     [[ "$hour" =~ ^[0-9]{10}$ ]] || continue
