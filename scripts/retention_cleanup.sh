@@ -39,12 +39,29 @@ find "$RAW_DIR" -type f -name "*.${RAW_EXT}.zst" | while read -r raw_file; do
     fi
 
     crx_file="$RINEX_DIR/$year/$doy/${hour}.crx.gz"
+    obs_fallback_file="$RINEX_DIR/$year/$doy/${hour}.obs.gz"
     nav_file="$RINEX_DIR/$year/$doy/${hour}.nav.gz"
     all_confirmed=true
 
+    # Whichever obs-equivalent file actually exists locally (Hatanaka
+    # succeeded -> .crx.gz, or the plain-gzip fallback -> .obs.gz) is
+    # the one we require and check for on the remotes.
+    if [ -f "$crx_file" ]; then
+        obs_variant="$crx_file"
+        obs_variant_name="${hour}.crx.gz"
+    elif [ -f "$obs_fallback_file" ]; then
+        obs_variant="$obs_fallback_file"
+        obs_variant_name="${hour}.obs.gz"
+    else
+        obs_variant=""
+        obs_variant_name=""
+        echo "$(date): No .crx.gz or .obs.gz found locally for $hour - skipping" >> "$LOG_FILE"
+    fi
+
     for base_remote in "$REMOTE_STORAGE_1" "$REMOTE_STORAGE_2"; do
         remote="${base_remote}/${STATION_NAME}/${year}/${doy}"
-        for f in "${hour}.${RAW_EXT}.zst" "${hour}.crx.gz" "${hour}.nav.gz"; do
+        for f in "${hour}.${RAW_EXT}.zst" "${obs_variant_name}" "${hour}.nav.gz"; do
+            [ -z "$f" ] && { all_confirmed=false; continue; }
             if ! check_remote "$remote" "$f"; then
                 all_confirmed=false
                 echo "$(date): Missing $f on $remote - will not delete $hour" >> "$LOG_FILE"
@@ -53,7 +70,7 @@ find "$RAW_DIR" -type f -name "*.${RAW_EXT}.zst" | while read -r raw_file; do
     done
 
     if [ "$all_confirmed" = true ]; then
-        rm -f "$raw_file" "$crx_file" "$nav_file"
+        rm -f "$raw_file" "$obs_variant" "$nav_file"
         echo "$(date): Deleted local files for $hour (confirmed on both remotes)" >> "$LOG_FILE"
     fi
 done
