@@ -52,8 +52,9 @@ if [ -f "$RAW_FILE_FLAT" ]; then
             gzip -f "$CRX_FILE"
             rm -f "$OBS_FILE"
         else
-            echo "$(date): FAILED to Hatanaka-compress $OBS_FILE" >> "$LOG_FILE"
+            echo "$(date): FAILED to Hatanaka-compress $OBS_FILE — falling back to plain gzip" >> "$LOG_FILE"
             rm -f "$CRX_FILE"
+            gzip -f "$OBS_FILE"
         fi
 
         gzip -f "$NAV_FILE"
