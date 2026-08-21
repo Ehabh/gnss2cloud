@@ -53,7 +53,7 @@ built.
 - The Docker image adapts every bare-metal script to run without root
   (using [supercronic](https://github.com/aptible/supercronic) instead
   of system cron, which normally requires a root daemon).
-  - **Compression pipeline** (Hatanaka+gzip for RINEX, gzip for nav, zstd
+- **Compression pipeline** (Hatanaka+gzip for RINEX, gzip for nav, zstd
   for raw): validated end-to-end in Docker on three host OSes (Ubuntu,
   AlmaLinux, Debian) against a live u-blox receiver, including the
   `.obs.gz` fallback path. Multi-day soak testing in progress; retention
@@ -249,7 +249,7 @@ configuration differs.
   the correct RTKLIB format token through the pipeline, but no real
   NovAtel or Septentrio hardware has been run against this container.
   See `docs/receiver-setup.md`.
-  - **`.nav.gz` uploads one cycle late.** The upload script requires a
+- **`.nav.gz` uploads one cycle late.** The upload script requires a
   file be >5 minutes old before uploading; freshly-created `.nav.gz`
   files sit right at that boundary and consistently miss the same-hour
   upload, catching up the following hour instead. Self-healing (no data
