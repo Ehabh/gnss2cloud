@@ -5,9 +5,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt
-RUN git clone --depth 1 https://github.com/tomojitakasu/RTKLIB.git
-RUN cd /opt/RTKLIB/app/str2str/gcc && make
-RUN cd /opt/RTKLIB/app/convbin/gcc && make
+RUN git clone --branch demo5 https://github.com/rtklibexplorer/RTKLIB.git \
+    && cd RTKLIB && git checkout 75a2e56275485b21a67bd35bc94bbeb8936e1a74
+RUN cd /opt/RTKLIB/app/consapp/str2str/gcc && make
+RUN cd /opt/RTKLIB/app/consapp/convbin/gcc && make
 
 # --- rclone (official static binary) ---
 RUN curl https://rclone.org/install.sh | bash
@@ -31,8 +32,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates logrotate \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /opt/RTKLIB/app/str2str/gcc/str2str /usr/local/bin/str2str
-COPY --from=builder /opt/RTKLIB/app/convbin/gcc/convbin /usr/local/bin/convbin
+COPY --from=builder /opt/RTKLIB/app/consapp/str2str/gcc/str2str /usr/local/bin/str2str
+COPY --from=builder /opt/RTKLIB/app/consapp/convbin/gcc/convbin /usr/local/bin/convbin
 COPY --from=builder /usr/bin/rclone /usr/local/bin/rclone
 COPY --from=builder /usr/local/bin/supercronic /usr/local/bin/supercronic
 
