@@ -311,6 +311,7 @@ Thanks to [Storm Developments](https://stormdevelopments.ca) and
 [Backblaze](https://www.backblaze.com) for providing free-tier
 access to cloud storage, which helped in the development and testing
 of this project.
+
 Portions of this project (including the compression pipeline, the
 RTKLIB bug investigation, and this documentation) were developed and
 reviewed with assistance from [Claude](https://claude.ai) (Anthropic),
