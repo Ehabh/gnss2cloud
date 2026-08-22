@@ -287,17 +287,12 @@ configuration differs.
   upload, catching up the following hour instead. Self-healing (no data
   loss), but not yet resolved — either lowering the age threshold or
   delaying the upload schedule would fix it.
-- **Pre-fix `.obs` files may need manual cleanup.** Files converted
-  before the RTKLIB fork switch (see [Compression](#compression)) that
-  failed Hatanaka compression were left as plain `.obs`, uncompressed
-  and untouched by upload/retention. These predate the `.obs.gz`
-  fallback and need manual removal if present.
 - **Upload-state markers have no automatic garbage collection** beyond
   what `retention_cleanup.sh` removes on successful deletion. If a
   file is ever deleted out-of-band (manually, or by a future change),
   its markers would be orphaned in `logs/upload_state/` — harmless
   (just unused disk space) but not currently swept up separately.
-  
+
 ## Roadmap
 
 - **Multi-bucket scalability** — auto-detect `REMOTE_STORAGE_N`
