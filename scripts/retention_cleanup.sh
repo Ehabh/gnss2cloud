@@ -10,10 +10,11 @@ LOG_FILE="/data/logs/retention.log"
 MIN_AGE_HOURS="${MIN_AGE_HOURS:-24}"
 now_epoch=$(date -u +%s)
 
-check_remote() {
-    local remote="$1"
-    local fname="$2"
-    rclone lsf "$remote" --include "$fname" 2>/dev/null | grep -q "^$fname$"
+STATE_DIR="/data/logs/upload_state"
+
+is_confirmed() {
+    local fname="$1"
+    [ -f "$STATE_DIR/${fname}.r1.ok" ] && [ -f "$STATE_DIR/${fname}.r2.ok" ]
 }
 
  case "${GNSS_FORMAT:-}" in
@@ -43,9 +44,6 @@ find "$RAW_DIR" -type f -name "*.${RAW_EXT}.zst" | while read -r raw_file; do
     nav_file="$RINEX_DIR/$year/$doy/${hour}.nav.gz"
     all_confirmed=true
 
-    # Whichever obs-equivalent file actually exists locally (Hatanaka
-    # succeeded -> .crx.gz, or the plain-gzip fallback -> .obs.gz) is
-    # the one we require and check for on the remotes.
     if [ -f "$crx_file" ]; then
         obs_variant="$crx_file"
         obs_variant_name="${hour}.crx.gz"
@@ -58,19 +56,19 @@ find "$RAW_DIR" -type f -name "*.${RAW_EXT}.zst" | while read -r raw_file; do
         echo "$(date): No .crx.gz or .obs.gz found locally for $hour - skipping" >> "$LOG_FILE"
     fi
 
-    for base_remote in "$REMOTE_STORAGE_1" "$REMOTE_STORAGE_2"; do
-        remote="${base_remote}/${STATION_NAME}/${year}/${doy}"
-        for f in "${hour}.${RAW_EXT}.zst" "${obs_variant_name}" "${hour}.nav.gz"; do
-            [ -z "$f" ] && { all_confirmed=false; continue; }
-            if ! check_remote "$remote" "$f"; then
-                all_confirmed=false
-                echo "$(date): Missing $f on $remote - will not delete $hour" >> "$LOG_FILE"
-            fi
-        done
+    for f in "${hour}.${RAW_EXT}.zst" "${obs_variant_name}" "${hour}.nav.gz"; do
+        [ -z "$f" ] && { all_confirmed=false; continue; }
+        if ! is_confirmed "$f"; then
+            all_confirmed=false
+            echo "$(date): $f not yet confirmed on both remotes - will not delete $hour" >> "$LOG_FILE"
+        fi
     done
 
     if [ "$all_confirmed" = true ]; then
         rm -f "$raw_file" "$obs_variant" "$nav_file"
+        rm -f "$STATE_DIR/${hour}.${RAW_EXT}.zst".r1.ok "$STATE_DIR/${hour}.${RAW_EXT}.zst".r2.ok
+        rm -f "$STATE_DIR/${obs_variant_name}".r1.ok "$STATE_DIR/${obs_variant_name}".r2.ok
+        rm -f "$STATE_DIR/${hour}.nav.gz".r1.ok "$STATE_DIR/${hour}.nav.gz".r2.ok
         echo "$(date): Deleted local files for $hour (confirmed on both remotes)" >> "$LOG_FILE"
     fi
 done
