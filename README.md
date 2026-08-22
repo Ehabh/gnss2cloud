@@ -60,9 +60,9 @@ built.
   surfaced and fixed two real issues beyond the compression logic
   itself — see [Compression](#compression) (an upstream RTKLIB bug)
   and [Upload efficiency](#upload-efficiency) (a cloud transaction-cap
-  issue). Retention cleanup's interaction with compressed files and
-  the upload-state cache has been reviewed and unit-tested; full
-  multi-day live confirmation is ongoing.
+  issue). Retention cleanup was confirmed working correctly against
+  live data with the new upload-state-cache logic, deleting local
+  files only after both remotes confirmed a copy.
 
 **Not yet implemented:** push notifications (e.g. ntfy.sh) for health
 alerts — currently alerts are written to `logs/health.log` only. See
