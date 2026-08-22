@@ -55,10 +55,14 @@ built.
   of system cron, which normally requires a root daemon).
 - **Compression pipeline** (Hatanaka+gzip for RINEX, gzip for nav, zstd
   for raw): validated end-to-end in Docker on three host OSes (Ubuntu,
-  AlmaLinux, Debian) against a live u-blox receiver, including the
-  `.obs.gz` fallback path. Multi-day soak testing in progress; retention
-  cleanup's interaction with compressed files has been reviewed and
-  unit-tested but not yet observed on a real multi-day run.
+  AlmaLinux, Debian) against a live u-blox receiver over a multi-day
+  continuous run, including the `.obs.gz` fallback path. This testing
+  surfaced and fixed two real issues beyond the compression logic
+  itself — see [Compression](#compression) (an upstream RTKLIB bug)
+  and [Upload efficiency](#upload-efficiency) (a cloud transaction-cap
+  issue). Retention cleanup's interaction with compressed files and
+  the upload-state cache has been reviewed and unit-tested; full
+  multi-day live confirmation is ongoing.
 
 **Not yet implemented:** push notifications (e.g. ntfy.sh) for health
 alerts — currently alerts are written to `logs/health.log` only. See
@@ -96,6 +100,34 @@ This project builds `convbin`/`str2str` from the actively-maintained
 [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB) fork
 instead (pinned to a specific commit in the Dockerfile for reproducible
 builds), which resolves it.
+
+
+## Upload efficiency
+
+`upload_hourly.sh` re-scans all locally-retained files every hour so
+it's self-healing after any failure — but without care, this means
+every file gets re-verified against the cloud via API call for the
+**entire** local retention window (up to `MIN_AGE_HOURS`), every
+single hour, not just once. In multi-day testing this was found to
+generate enough Backblaze B2 "Class C" (list/metadata) transactions to
+exceed B2's daily transaction cap — a real operational cost, not just
+a theoretical one.
+
+**Fix:** once a file is confirmed present on a given remote, a marker
+is written to `logs/upload_state/` (e.g. `<filename>.r1.ok`). Future
+runs skip the API check entirely for any file+remote combo already
+marked, so steady-state cost scales with *new* files per hour, not the
+whole retention window. `retention_cleanup.sh` reads the same markers
+(a local filesystem check, no API calls) rather than re-verifying
+remotes itself, and removes the markers alongside the data files once
+both are deleted.
+
+**Worth knowing if scaling to many stations on one cloud account:**
+transaction caps are typically account-wide, not per-bucket/station —
+running several stations against the same provider account multiplies
+the load. Check your provider's transaction/API quota dashboard
+(e.g. Backblaze B2's "Caps & Alerts" page) if running more than a
+handful of stations on one account.
 
 ## Prerequisites
 
@@ -260,7 +292,12 @@ configuration differs.
   failed Hatanaka compression were left as plain `.obs`, uncompressed
   and untouched by upload/retention. These predate the `.obs.gz`
   fallback and need manual removal if present.
-
+- **Upload-state markers have no automatic garbage collection** beyond
+  what `retention_cleanup.sh` removes on successful deletion. If a
+  file is ever deleted out-of-band (manually, or by a future change),
+  its markers would be orphaned in `logs/upload_state/` — harmless
+  (just unused disk space) but not currently swept up separately.
+  
 ## Roadmap
 
 - **Multi-bucket scalability** — auto-detect `REMOTE_STORAGE_N`
