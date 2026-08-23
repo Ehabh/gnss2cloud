@@ -41,7 +41,25 @@ if [ -f "$RAW_FILE_FLAT" ]; then
         -q /dev/null \
         -l /dev/null \
         -s /dev/null
-    if [ $? -eq 0 ]; then
+        if [ $? -eq 0 ]; then
+        OBS_FILE="$RINEX_DEST_DIR/${PREV_HOUR}.obs"
+        NAV_FILE="$RINEX_DEST_DIR/${PREV_HOUR}.nav"
+        CRX_FILE="$RINEX_DEST_DIR/${PREV_HOUR}.crx"
+
+        # rnx2crx rejects non-standard filenames like .obs, so we use
+        # filter mode (stdin/stdout) rather than passing the file directly.
+        if rnx2crx - < "$OBS_FILE" > "$CRX_FILE" 2>>"$LOG_FILE"; then
+            gzip -f "$CRX_FILE"
+            rm -f "$OBS_FILE"
+        else
+            echo "$(date): FAILED to Hatanaka-compress $OBS_FILE — falling back to plain gzip" >> "$LOG_FILE"
+            rm -f "$CRX_FILE"
+            gzip -f "$OBS_FILE"
+        fi
+
+        gzip -f "$NAV_FILE"
+        zstd -q -f --rm "$RAW_FILE"
+
         echo "$(date): Converted $RAW_FILE -> $RINEX_DEST_DIR/" >> "$LOG_FILE"
     else
         echo "$(date): FAILED to convert $RAW_FILE" >> "$LOG_FILE"

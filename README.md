@@ -11,10 +11,15 @@ been validated.
 
 1. Captures raw GNSS data continuously from the receiver, rotating to a
    new file every hour.
-2. Converts each closed hour to RINEX 3.04 (`.obs` / `.nav`).
-3. Uploads raw + RINEX files to two cloud providers in parallel
-   (currently Backblaze B2 and Storm Developments, both S3-compatible or
-   rclone-native, easy to add more).
+2. Converts each closed hour to RINEX 3.04, then compresses it:
+   Hatanaka + gzip for the observation file, plain gzip for the
+   navigation file, zstd for the raw capture. If Hatanaka compression
+   fails on a given hour (rare — see [Known limitations](#known-limitations)),
+   the observation file falls back to plain gzip rather than being
+   silently withheld.
+3. Uploads raw + RINEX files (`.crx.gz`/`.obs.gz`, `.nav.gz`, `.zst`) to
+   two cloud providers in parallel (currently Backblaze B2 and Storm
+   Developments, both S3-compatible or rclone-native, easy to add more).
 4. Cleans up local files automatically, once a file is confirmed present
    on **both** remotes and at least 24 hours old.
 5. Rotates its own logs.
@@ -48,10 +53,81 @@ built.
 - The Docker image adapts every bare-metal script to run without root
   (using [supercronic](https://github.com/aptible/supercronic) instead
   of system cron, which normally requires a root daemon).
+- **Compression pipeline** (Hatanaka+gzip for RINEX, gzip for nav, zstd
+  for raw): validated end-to-end in Docker on three host OSes (Ubuntu,
+  AlmaLinux, Debian) against a live u-blox receiver over a multi-day
+  continuous run, including the `.obs.gz` fallback path. This testing
+  surfaced and fixed two real issues beyond the compression logic
+  itself — see [Compression](#compression) (an upstream RTKLIB bug)
+  and [Upload efficiency](#upload-efficiency) (a cloud transaction-cap
+  issue). Retention cleanup was confirmed working correctly against
+  live data with the new upload-state-cache logic, deleting local
+  files only after both remotes confirmed a copy.
 
 **Not yet implemented:** push notifications (e.g. ntfy.sh) for health
 alerts — currently alerts are written to `logs/health.log` only. See
 [Known limitations](#known-limitations) below.
+
+## Compression
+
+RINEX and raw files are compressed before upload:
+
+- **Observation data** (`.obs`) — [Hatanaka-compressed](https://gssc.esa.int/navipedia/index.php/Hatanaka_RINEX_Compression)
+  (`rnx2crx`) then gzipped, producing `.crx.gz`. This is the standard
+  format expected by the wider GNSS tooling ecosystem (`teqc`,
+  `gfzrnx`, IGS-style archives), chosen over a more aggressive
+  compressor specifically for that compatibility.
+- **Navigation data** (`.nav`) — plain gzip, producing `.nav.gz`.
+  Hatanaka compression only applies to observation-type RINEX, not nav.
+- **Raw receiver data** — [zstd](https://github.com/facebook/zstd),
+  producing e.g. `.ubx.zst`. No compatibility constraint here (it's a
+  proprietary receiver format, not something external tools read
+  directly), so zstd was chosen for its better ratio and speed over
+  gzip.
+
+**Fallback:** `rnx2crx` performs real RINEX-spec validation as a
+side effect of compression. If it rejects a file (see the RTKLIB bug
+noted below), the observation file is compressed with plain gzip
+instead (`.obs.gz`) rather than being left uncompressed and invisible
+to the upload/retention scripts. `.obs.gz` files are functionally
+equivalent to `.crx.gz` for upload/retention purposes, just larger.
+
+**Known upstream bug:** the official [tomojitakasu/RTKLIB](https://github.com/tomojitakasu/RTKLIB)
+`convbin` (as of `master`) has a bug causing "Duplicated satellite in
+one epoch" errors on u-blox RXM-RAWX data — reported upstream at
+[tomojitakasu/RTKLIB#800](https://github.com/tomojitakasu/RTKLIB/issues/800).
+This project builds `convbin`/`str2str` from the actively-maintained
+[rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB) fork
+instead (pinned to a specific commit in the Dockerfile for reproducible
+builds), which resolves it.
+
+
+## Upload efficiency
+
+`upload_hourly.sh` re-scans all locally-retained files every hour so
+it's self-healing after any failure — but without care, this means
+every file gets re-verified against the cloud via API call for the
+**entire** local retention window (up to `MIN_AGE_HOURS`), every
+single hour, not just once. In multi-day testing this was found to
+generate enough Backblaze B2 "Class C" (list/metadata) transactions to
+exceed B2's daily transaction cap — a real operational cost, not just
+a theoretical one.
+
+**Fix:** once a file is confirmed present on a given remote, a marker
+is written to `logs/upload_state/` (e.g. `<filename>.r1.ok`). Future
+runs skip the API check entirely for any file+remote combo already
+marked, so steady-state cost scales with *new* files per hour, not the
+whole retention window. `retention_cleanup.sh` reads the same markers
+(a local filesystem check, no API calls) rather than re-verifying
+remotes itself, and removes the markers alongside the data files once
+both are deleted.
+
+**Worth knowing if scaling to many stations on one cloud account:**
+transaction caps are typically account-wide, not per-bucket/station —
+running several stations against the same provider account multiplies
+the load. Check your provider's transaction/API quota dashboard
+(e.g. Backblaze B2's "Caps & Alerts" page) if running more than a
+handful of stations on one account.
 
 ## Prerequisites
 
@@ -88,6 +164,13 @@ Apply it:
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
+**SELinux-enforcing hosts** (e.g. AlmaLinux/RHEL-family with SELinux
+`Enforcing`): bind-mounted volumes need the `:z` label or the container
+will get silent permission-denied errors despite correct Unix
+permissions. Add `:z` to each volume line in `docker-compose.yml`
+(e.g. `${DATA_DIR:-./data}/raw:/data/raw:z`) on these hosts. Not
+needed on Debian/Ubuntu (AppArmor, no equivalent bind-mount labeling
+requirement).
 
 Verify:
 ```bash
@@ -125,12 +208,20 @@ ls -la /dev/gnss0
 3. Place your working `rclone.conf` in the project root (referenced by
    `RCLONE_CONFIG` in `.env`, default `./rclone.conf`). ** only an example is available**
 
-4. Build and start:
-   ```bash
-   docker compose up -d --build
-   ```
+4. Pre-create the data directories with correct ownership (Docker
+   auto-creates them as `root` on first run otherwise, which the
+   container's non-root user can't write to):
+```bash
+   mkdir -p data/raw data/rinex data/logs
+   sudo chown -R ${PUID:-1000}:${PGID:-1000} data/
+```
 
-5. Check it's running:
+5. Build and start:
+```bash
+   docker compose up -d --build
+```
+
+6. Check it's running:
    ```bash
    docker compose ps
    docker compose logs -f
@@ -190,6 +281,29 @@ configuration differs.
   the correct RTKLIB format token through the pipeline, but no real
   NovAtel or Septentrio hardware has been run against this container.
   See `docs/receiver-setup.md`.
+- **`.nav.gz` uploads one cycle late.** The upload script requires a
+  file be >5 minutes old before uploading; freshly-created `.nav.gz`
+  files sit right at that boundary and consistently miss the same-hour
+  upload, catching up the following hour instead. Self-healing (no data
+  loss), but not yet resolved — either lowering the age threshold or
+  delaying the upload schedule would fix it.
+- **Upload-state markers have no automatic garbage collection** beyond
+  what `retention_cleanup.sh` removes on successful deletion. If a
+  file is ever deleted out-of-band (manually, or by a future change),
+  its markers would be orphaned in `logs/upload_state/` — harmless
+  (just unused disk space) but not currently swept up separately.
+
+## Roadmap
+
+- **Multi-bucket scalability** — auto-detect `REMOTE_STORAGE_N`
+  (currently fixed at exactly 2), with a configurable minimum to
+  preserve the redundancy guarantee.
+- **ARM/Raspberry Pi validation** for the compression pipeline
+  specifically (validated on x86_64 so far).
+- **Live C/N0 + position dashboard**, fanning out the receiver stream
+  via `str2str`'s multi-output support alongside the existing hourly
+  recording, without disturbing it.
+- **`CHANGELOG.md`** tracking version history going forward.
 
 ## Acknowledgments
 
@@ -197,6 +311,14 @@ Thanks to [Storm Developments](https://stormdevelopments.ca) and
 [Backblaze](https://www.backblaze.com) for providing free-tier
 access to cloud storage, which helped in the development and testing
 of this project.
+
+Portions of this project (including the compression pipeline, the
+RTKLIB bug investigation, and this documentation) were developed and
+reviewed with assistance from [Claude](https://claude.ai) (Anthropic),
+with additional help at various points from
+[Microsoft Copilot](https://copilot.microsoft.com),
+[Google AI Mode](https://support.google.com/websearch/answer/14901683),
+and Brave's [Leo](https://brave.com/leo/).
 
 ## License
 
