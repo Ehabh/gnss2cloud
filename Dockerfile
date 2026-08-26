@@ -35,7 +35,7 @@ FROM debian:bookworm-slim
 # this only works because there's a single in-container user; see the
 # bare-metal README notes if adapting this for a multi-user host setup.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates logrotate zstd \
+    ca-certificates logrotate zstd socat \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/RTKLIB/app/consapp/str2str/gcc/str2str /usr/local/bin/str2str
