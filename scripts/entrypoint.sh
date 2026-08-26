@@ -20,6 +20,21 @@ case "${GNSS_FORMAT:-}" in
     *)   RAW_EXT="ubx" ;;
 esac
 
+# NMEA_SOURCE_MODE controls whether/how a filtered NMEA stream (GSV,
+# VTG, GSA only — never GGA/RMC) is made available on
+# tcpsvr://:${NMEA_INTERNAL_PORT} for the optional web dashboard's
+# live position/CN0 panel. Purely additive: default (none) reproduces
+# today's behavior exactly. See docs/receiver-setup.md.
+#
+#   none      - no NMEA output at all (default)
+#   shared    - receiver puts NMEA on the SAME port as raw capture;
+#               add a second -out to the existing str2str call below.
+#   dedicated - receiver has a SEPARATE port/virtual-port for NMEA
+#               (NMEA_DEVICE_PATH); a fully independent str2str
+#               process handles it, decoupled from raw capture.
+NMEA_SOURCE_MODE="${NMEA_SOURCE_MODE:-none}"
+NMEA_INTERNAL_PORT="${NMEA_INTERNAL_PORT:-5015}"
+
 # str2str becomes the container's main (PID 1) process. If it exits,
 # Docker's restart policy (set in docker-compose.yml) brings it back.
 exec str2str -in "serial://${GNSS_DEVICE}:${GNSS_BAUD}${FORMAT_SUFFIX}" \
