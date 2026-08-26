@@ -23,6 +23,19 @@ services:
       - STATION_NAME=${STATION_NAME:-station01}
       - REMOTE_STORAGE_1=${REMOTE_STORAGE_1}
       - REMOTE_STORAGE_2=${REMOTE_STORAGE_2}
+      # Optional filtered-NMEA fan-out (GSV/VTG/GSA only) for the
+      # web dashboard's live position/CN0 panel. Default is "none" —
+      # no output, no behavior change. See docs/receiver-setup.md.
+      - NMEA_SOURCE_MODE=${NMEA_SOURCE_MODE:-none}
+      - NMEA_INTERNAL_PORT=${NMEA_INTERNAL_PORT:-5015}
+      - NMEA_DEVICE_PATH=${NMEA_DEVICE_PATH:-}
+      - NMEA_BAUD=${NMEA_BAUD:-9600}
+
+    # Internal-only: reachable by other containers on this compose
+    # network (e.g. the optional web dashboard's NMEA bridge), never
+    # published to the host. No-op unless NMEA_SOURCE_MODE is set.
+    expose:
+      - "${NMEA_INTERNAL_PORT:-5015}"
 
     volumes:
       - ${DATA_DIR:-./data}/raw:/data/raw
