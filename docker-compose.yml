@@ -50,3 +50,49 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+        
+  gnss2cloud-web:
+    build:
+      context: ./web
+    image: gnss2cloud-web:latest
+    container_name: gnss2cloud-web-${STATION_NAME:-station01}
+
+    # Opt-in only: docker compose --profile web up
+    profiles:
+      - web
+
+    environment:
+      - NMEA_BRIDGE_HOST=gnss2cloud
+      - NMEA_INTERNAL_PORT=${NMEA_INTERNAL_PORT:-5015}
+      - WEB_AUTH_ENABLED=${WEB_AUTH_ENABLED:-false}
+      - WEB_LOG_TAIL_LINES=${WEB_LOG_TAIL_LINES:-50}
+      - WEB_MOVEMENT_WINDOW_S=${WEB_MOVEMENT_WINDOW_S:-60}
+      - WEB_SECURITY_LOG_PATH=/data/web_logs/security_events.log
+
+    volumes:
+      # Read-only, logs only — never the full ./data tree (raw/rinex
+      # stay inaccessible even under compromise, per earlier design).
+      - ${DATA_DIR:-./data}/logs:/data/logs:ro
+      # Separate, writable location for this container's OWN sink
+      # (security-event log, Step 7) — never shared with the main
+      # container's volumes.
+      - ${WEB_DATA_DIR:-./web_data}:/data/web_logs
+
+    # No `ports:` published by default — reachable only from other
+    # containers on this compose network. Put a reverse proxy in
+    # front (TLS + basic auth) before any remote-network access; see
+    # docs. Uncomment below ONLY for local testing on a trusted LAN:
+    # ports:
+    #   - "8000:8000"
+
+    depends_on:
+      - gnss2cloud
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
