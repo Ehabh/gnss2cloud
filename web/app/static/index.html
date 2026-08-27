@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gnss2cloud — station monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0E11;
+    --panel: #12161B;
+    --border: #1E252C;
+    --text: #E6EDF3;
+    --muted: #7C8896;
+    --good: #4FD1C5;
+    --warn: #E8A33D;
+    --alert: #E25555;
+    --gp: #4FD1C5;
+    --gl: #6E9BE8;
+    --ga: #C792EA;
+    --gb: #E8A33D;
+    --gq: #7C8896;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin: 0;
+    color: var(--text);
+  }
+
+  header h1 span { color: var(--muted); }
+
+  .conn-badge {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .conn-badge.live { color: var(--good); border-color: var(--good); }
+  .conn-badge.down { color: var(--alert); border-color: var(--alert); }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 28px 60px;
+  }
+
+  .status-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 18px;
+  }
+
+  .card .eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .card .value {
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background: var(--muted);
+  }
+  .dot.ok { background: var(--good); }
+  .dot.warn { background: var(--warn); }
+  .dot.alert { background: var(--alert); }
+
+  section.panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+  }
+
+  section.panel h2 {
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 16px;
+    font-weight: 500;
+  }
+
+  .telemetry-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  .telemetry-item .label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .telemetry-item .num {
+    font-family: var(--mono);
+    font-size: 22px;
+  }
+  .telemetry-item .unit {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  /* Signature element: signal-strength bar rack, grouped by constellation */
+  .rack {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 140px;
+    padding: 0 2px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    min-width: 14px;
+  }
+
+  .bar {
+    width: 10px;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.4s ease;
+  }
+
+  .bar-prn {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 6px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    max-height: 40px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .legend-swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+  }
+
+  .empty-state {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 20px 0;
+  }
+
+  footer {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 28px 40px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>gnss2cloud <span>/ station monitor</span></h1>
+  <div class="conn-badge" id="conn-badge">connecting…</div>
+</header>
+
+<main>
+
+  <div class="status-row" id="status-row">
+    <!-- populated from /api/logs/* -->
+  </div>
+
+  <section class="panel">
+    <h2>Satellite signal (CN0)</h2>
+    <div id="sat-rack" class="rack">
+      <div class="empty-state">Waiting for satellite data…</div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Receiver telemetry</h2>
+    <div class="telemetry-row">
+      <div class="telemetry-item">
+        <div class="label">Speed (60s avg)</div>
+        <div class="num" id="tm-speed">—<span class="unit">km/h</span></div>
+      </div>
+      <div class="telemetry-item">
+        <div class="label">Fix type</div>
+        <div class="num" id="tm-fix">—</div>
+      </div>
+      <div class="telemetry-item">
+        <div class="label">PDOP</div>
+        <div class="num" id="tm-pdop">—</div>
+      </div>
+      <div class="telemetry-item">
+        <div class="label">HDOP</div>
+        <div class="num" id="tm-hdop">—</div>
+      </div>
+      <div class="telemetry-item">
+        <div class="label">Satellites tracked</div>
+        <div class="num" id="tm-svcount">—</div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  gnss2cloud — monitoring only. Position is never transmitted or displayed by design.
+</footer>
+
+<script>
+const TALKER_COLORS = {
+  GP: 'var(--gp)', GL: 'var(--gl)', GA: 'var(--ga)', GB: 'var(--gb)', GQ: 'var(--gq)', GN: 'var(--muted)'
+};
+const TALKER_NAMES = {
+  GP: 'GPS', GL: 'GLONASS', GA: 'Galileo', GB: 'BeiDou', GQ: 'QZSS'
+};
+const FIX_LABELS = { '1': 'No fix', '2': '2D', '3': '3D' };
+// Doppler noise floor for a stationary antenna — below this, treat
+// speed as receiver noise, not real movement. See docs/receiver-setup.md.
+const STATIONARY_THRESHOLD_KMPH = 0.05;
+
+const STATUS_LOGS = [
+  { key: 'health', label: 'Device health' },
+  { key: 'upload', label: 'Upload' },
+  { key: 'retention', label: 'Retention' },
+  { key: 'convert', label: 'Conversion' },
+];
+
+function severityFromLine(line) {
+  if (!line) return 'muted';
+  const upper = line.toUpperCase();
+  if (upper.includes('ALERT') || upper.includes('ERROR') || upper.includes('FAIL')) return 'alert';
+  if (upper.includes('WARN')) return 'warn';
+  if (upper.includes('OK') || upper.includes('CONFIRMED') || upper.includes('SUCCESS') || upper.includes('CONVERTED')) return 'ok';
+  return 'muted';
+}
+
+function timeAgo(line) {
+  // Logs are plain text with a leading timestamp; just show the raw
+  // tail of the last line rather than parsing every log's own format.
+  return line || 'no data yet';
+}
+
+async function refreshStatusCards() {
+  const row = document.getElementById('status-row');
+  row.innerHTML = '';
+  for (const { key, label } of STATUS_LOGS) {
+    let lastLine = null;
+    try {
+      const res = await fetch(`/api/logs/${key}?lines=1`);
+      const data = await res.json();
+      lastLine = data.lines && data.lines.length ? data.lines[data.lines.length - 1] : null;
+    } catch (e) {
+      lastLine = null;
+    }
+    const sev = severityFromLine(lastLine);
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="eyebrow">${label}</div>
+      <div class="value"><span class="dot ${sev}"></span>${timeAgo(lastLine)}</div>
+    `;
+    row.appendChild(card);
+  }
+}
+
+function renderSatellites(satellites) {
+  const rack = document.getElementById('sat-rack');
+  const legend = document.getElementById('legend');
+
+  if (!satellites || satellites.length === 0) {
+    rack.innerHTML = '<div class="empty-state">Waiting for satellite data…</div>';
+    legend.innerHTML = '';
+    return;
+  }
+
+  const sorted = [...satellites].sort((a, b) => {
+    if (a.talker !== b.talker) return a.talker.localeCompare(b.talker);
+    return a.prn.localeCompare(b.prn);
+  });
+
+  rack.innerHTML = sorted.map(sat => {
+    const cn0 = sat.cn0 == null ? 0 : sat.cn0;
+    const heightPct = Math.max(4, Math.min(100, (cn0 / 50) * 100));
+    const color = TALKER_COLORS[sat.talker] || 'var(--muted)';
+    const opacity = sat.cn0 == null ? 0.25 : 1;
+    return `
+      <div class="bar-col" title="${sat.talker}-${sat.prn}: ${sat.cn0 ?? 'no signal'} dB-Hz">
+        <div class="bar" style="height:${heightPct}%; background:${color}; opacity:${opacity};"></div>
+        <div class="bar-prn">${sat.prn}</div>
+      </div>
+    `;
+  }).join('');
+
+  const seenTalkers = [...new Set(sorted.map(s => s.talker))].filter(t => TALKER_NAMES[t]);
+  legend.innerHTML = seenTalkers.map(t => `
+    <div class="legend-item">
+      <span class="legend-swatch" style="background:${TALKER_COLORS[t]}"></span>
+      ${TALKER_NAMES[t]}
+    </div>
+  `).join('');
+}
+
+function renderTelemetry(state) {
+  const speed = state.movement?.avg_speed_kmph ?? null;
+  const speedEl = document.getElementById('tm-speed');
+  if (speed == null) {
+    speedEl.innerHTML = '—<span class="unit">km/h</span>';
+  } else if (speed < STATIONARY_THRESHOLD_KMPH) {
+    speedEl.innerHTML = `stationary<span class="unit"> (${speed.toFixed(3)} km/h noise)</span>`;
+  } else {
+    speedEl.innerHTML = `${speed.toFixed(2)}<span class="unit">km/h</span>`;
+  }
+
+  const fix = state.fix_quality?.fix_type;
+  document.getElementById('tm-fix').textContent = FIX_LABELS[fix] || '—';
+  document.getElementById('tm-pdop').textContent = state.fix_quality?.pdop ?? '—';
+  document.getElementById('tm-hdop').textContent = state.fix_quality?.hdop ?? '—';
+  document.getElementById('tm-svcount').textContent = state.satellites?.length ?? '—';
+
+  renderSatellites(state.satellites);
+}
+
+function setConnBadge(status) {
+  const el = document.getElementById('conn-badge');
+  el.className = 'conn-badge ' + status;
+  el.textContent = status === 'live' ? 'live' : status === 'down' ? 'disconnected' : 'connecting…';
+}
+
+// --- WebSocket with automatic reconnect + polling fallback ---
+let ws = null;
+let pollTimer = null;
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/api/nmea/current');
+      renderTelemetry(await res.json());
+    } catch (e) { /* keep last known state on transient errors */ }
+  }, 2000);
+}
+
+function connectWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/nmea`);
+
+  ws.onopen = () => {
+    setConnBadge('live');
+    stopPolling(); // WebSocket is live, no need to also poll
+  };
+  ws.onmessage = (event) => {
+    renderTelemetry(JSON.parse(event.data));
+  };
+  ws.onclose = () => {
+    setConnBadge('down');
+    startPolling(); // keep the dashboard useful while reconnecting
+    setTimeout(connectWebSocket, 3000);
+  };
+  ws.onerror = () => {
+    ws.close();
+  };
+}
+
+refreshStatusCards();
+setInterval(refreshStatusCards, 15000);
+connectWebSocket();
+</script>
+
+</body>
+</html>
