@@ -12,6 +12,8 @@ import asyncio
 import logging
 
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import config, nmea_bridge
 from .logs_api import router as logs_router
@@ -27,6 +29,18 @@ app = FastAPI(title="gnss2cloud dashboard (monitoring only)")
 # allowlist here rather than wildcarding.
 
 app.include_router(logs_router, dependencies=[Depends(require_auth)])
+# Dashboard static assets (single-file HTML/JS, no build step). Mounted
+# under /static rather than at "/" so it never shadows the API routes
+# below. Not gated by require_auth: the HTML/JS itself contains no
+# data — it only becomes useful once it calls the (already-gated)
+# REST/WebSocket endpoints, so serving the file itself is harmless
+# even if WEB_AUTH_ENABLED is ever turned on.
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+@app.get("/")
+async def dashboard():
+    return FileResponse("app/static/index.html")
 
 
 @app.on_event("startup")
