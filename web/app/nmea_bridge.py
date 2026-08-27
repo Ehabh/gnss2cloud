@@ -16,8 +16,10 @@ from . import config
 
 # Satellites seen in the GSV cycle currently being assembled, keyed
 # by (talker, prn) so multiple constellations don't collide.
-_gsv_in_progress: dict[tuple[str, str], dict] = {}
-_last_satellites: dict[str, dict] = {}
+# Tracked per-talker so one constellation's completed sequence never
+# wipes another's still-in-progress or already-published data.
+_gsv_in_progress: dict[str, dict[str, dict]] = {}  # talker -> {prn: data}
+_last_satellites: dict[str, dict] = {}             # "{talker}-{prn}" -> data
 
 # Rolling (timestamp, speed_kmph) samples for the movement window.
 _speed_samples: deque[tuple[float, float]] = deque()
@@ -37,14 +39,24 @@ def _handle_gsv(msg):
     total_msgs = int(msg.num_messages)
     msg_num = int(msg.msg_num)
 
+    bucket = _gsv_in_progress.setdefault(talker, {})
+
     for i in range(1, 5):
         prn = getattr(msg, f"sv_prn_num_{i}", None)
-        if not prn:
-            continue
         snr = getattr(msg, f"snr_{i}", None)
         elevation = getattr(msg, f"elevation_deg_{i}", None)
         azimuth = getattr(msg, f"azimuth_{i}", None)
-        _gsv_in_progress[(talker, prn)] = {
+
+        # Skip unused slots. Some receivers leave these blank,
+        # others mark them with a literal "0" PRN — treat both as
+        # empty, and additionally skip anything with no real data
+        # at all as a safety net against other placeholder schemes.
+        if not prn or prn == "0":
+            continue
+        if elevation is None and azimuth is None and snr is None:
+            continue
+
+        bucket[prn] = {
             "prn": prn,
             "talker": talker,
             "elevation": _to_num(elevation),
@@ -52,13 +64,13 @@ def _handle_gsv(msg):
             "cn0": _to_num(snr),
         }
 
-    # Last sentence of the cycle -> snapshot is complete, publish it.
+    # Only this talker's sequence is complete — merge just its
+    # satellites into the published snapshot, leaving every other
+    # constellation's already-published entries untouched.
     if msg_num == total_msgs:
-        global _last_satellites
-        _last_satellites = {
-            f"{t}-{p}": v for (t, p), v in _gsv_in_progress.items()
-        }
-        _gsv_in_progress.clear()
+        for prn, data in bucket.items():
+            _last_satellites[f"{talker}-{prn}"] = data
+        _gsv_in_progress[talker] = {}
 
 
 def _handle_vtg(msg):
