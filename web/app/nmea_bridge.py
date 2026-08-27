@@ -49,11 +49,16 @@ def _handle_gsv(msg):
 
         # Skip unused slots. Some receivers leave these blank,
         # others mark them with a literal "0" PRN — treat both as
-        # empty, and additionally skip anything with no real data
-        # at all as a safety net against other placeholder schemes.
-        if not prn or prn == "0":
+        # empty. Also guards against NMEA 4.11's trailing Signal ID
+        # field (e.g. "1", "6", "3") being misread as a phantom 5th
+        # satellite's PRN when a sentence has fewer than 4 real
+        # entries: pynmea2 returns "" (not None) for genuinely empty
+        # fields, so check against both explicitly. Real satellites
+        # with elevation/azimuth but no CN0 (weak/untracked signal)
+        # are legitimate and must NOT be filtered here.
+        if not prn or prn in ("0",):
             continue
-        if elevation is None and azimuth is None and snr is None:
+        if elevation in (None, "") and azimuth in (None, "") and snr in (None, ""):
             continue
 
         bucket[prn] = {
