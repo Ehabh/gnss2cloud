@@ -34,12 +34,28 @@ async def start_background_tasks():
     # Runs for the lifetime of the container; reconnects internally
     # on stream drops (see nmea_bridge.run_bridge). A failure here
     # should never prevent the REST API from serving log/status data.
-    asyncio.create_task(nmea_bridge.run_bridge())
+    app.state.bridge_task = asyncio.create_task(nmea_bridge.run_bridge())
     logger.info(
         "NMEA bridge started (target=%s:%s)",
         config.NMEA_HOST,
         config.NMEA_PORT,
     )
+
+
+@app.on_event("shutdown")
+async def stop_background_tasks():
+    # Without this, container stop/restart leaves run_bridge()'s task
+    # dangling — harmless in practice (the process is exiting anyway)
+    # but asyncio logs "Task was destroyed but it is pending!" on
+    # every restart, which is noise worth eliminating rather than
+    # learning to ignore.
+    task = getattr(app.state, "bridge_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 @app.get("/api/status")
