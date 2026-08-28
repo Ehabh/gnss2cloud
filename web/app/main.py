@@ -15,7 +15,7 @@ from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import config, nmea_bridge
+from . import config, nmea_bridge, uptime
 from .logs_api import router as logs_router
 from .security import require_auth
 
@@ -75,8 +75,14 @@ async def stop_background_tasks():
 @app.get("/api/status")
 async def status(_: str = Depends(require_auth)):
     """Cheap liveness/identity endpoint for the dashboard itself —
-    not the GNSS station's health (that's /api/logs/health)."""
-    return {"service": "gnss2cloud-web", "auth_enabled": config.AUTH_ENABLED}
+    not the GNSS station's health (that's /api/logs/health).
+    data_uptime is derived from health.log, not container uptime —
+    see uptime.py for why."""
+    return {
+        "service": "gnss2cloud-web",
+        "auth_enabled": config.AUTH_ENABLED,
+        "data_uptime": uptime.compute_data_uptime(),
+    }
 
 
 @app.get("/api/nmea/current")
