@@ -392,6 +392,16 @@ const STATUS_LOGS = [
   { key: 'convert', label: 'Conversion' },
 ];
 
+function formatDuration(seconds) {
+  if (seconds == null) return 'no data yet';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 function severityFromLine(line) {
   if (!line) return 'muted';
   const upper = line.toUpperCase();
@@ -440,6 +450,38 @@ async function refreshStatusCards() {
     node.dot.className = 'dot ' + sev;
     if (node.textEl.textContent !== text) node.textEl.textContent = text;
   }
+
+  // Data-flowing uptime: distinct from the log-based cards above —
+  // sourced from /api/status, which derives it from health.log's
+  // last ALERT rather than exposing a separate log endpoint for it.
+  let uptimeText = 'no data yet';
+  let uptimeSev = 'muted';
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+    const u = data.data_uptime;
+    if (u && u.seconds != null) {
+      uptimeText = formatDuration(u.seconds) + (u.estimated ? ' (est.)' : '');
+      uptimeSev = 'ok';
+    }
+  } catch (e) { /* keep previous value on transient errors */ }
+
+  let uNode = statusCardNodes.get('uptime');
+  if (!uNode) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="eyebrow">Data-flowing uptime</div>
+      <div class="value"><span class="dot"></span><span class="text"></span></div>
+    `;
+    const dot = card.querySelector('.dot');
+    const textEl = card.querySelector('.text');
+    row.appendChild(card);
+    uNode = { card, dot, textEl };
+    statusCardNodes.set('uptime', uNode);
+  }
+  uNode.dot.className = 'dot ' + uptimeSev;
+  if (uNode.textEl.textContent !== uptimeText) uNode.textEl.textContent = uptimeText;
 }
 
 // Persistent DOM node cache for the satellite rack, keyed by
