@@ -77,11 +77,14 @@ async def status(_: str = Depends(require_auth)):
     """Cheap liveness/identity endpoint for the dashboard itself —
     not the GNSS station's health (that's /api/logs/health).
     data_uptime is derived from health.log, not container uptime —
-    see uptime.py for why."""
+    container_uptime is the separate, literal "how long has the
+    main container been running" figure — see uptime.py for why
+    each is computed the way it is."""
     return {
         "service": "gnss2cloud-web",
         "auth_enabled": config.AUTH_ENABLED,
         "data_uptime": uptime.compute_data_uptime(),
+        "container_uptime": uptime.compute_container_uptime(),
     }
 
 
