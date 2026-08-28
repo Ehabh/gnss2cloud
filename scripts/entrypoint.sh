@@ -87,6 +87,8 @@ case "${NMEA_SOURCE_MODE}" in
         ;;
 esac
 
+date +%s > /data/logs/started_at
+
 # str2str becomes the container's main (PID 1) process. If it exits,
 # Docker's restart policy (set in docker-compose.yml) brings it back.
 exec str2str -in "serial://${GNSS_DEVICE}:${GNSS_BAUD}${FORMAT_SUFFIX}" \
