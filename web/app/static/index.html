@@ -419,6 +419,28 @@ function timeAgo(line) {
 
 const statusCardNodes = new Map(); // key -> { card, dot, text }
 
+// Shared card upsert: creates the card on first use, updates its
+// dot/text in place on every subsequent call (no full teardown —
+// same reasoning as the satellite rack fix above).
+function upsertStatusCard(row, key, label, text, sev) {
+  let node = statusCardNodes.get(key);
+  if (!node) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="eyebrow">${label}</div>
+      <div class="value"><span class="dot"></span><span class="text"></span></div>
+    `;
+    const dot = card.querySelector('.dot');
+    const textEl = card.querySelector('.text');
+    row.appendChild(card);
+    node = { card, dot, textEl };
+    statusCardNodes.set(key, node);
+  }
+  node.dot.className = 'dot ' + sev;
+  if (node.textEl.textContent !== text) node.textEl.textContent = text;
+}
+
 async function refreshStatusCards() {
   const row = document.getElementById('status-row');
   for (const { key, label } of STATUS_LOGS) {
@@ -430,58 +452,36 @@ async function refreshStatusCards() {
     } catch (e) {
       lastLine = null;
     }
-    const sev = severityFromLine(lastLine);
-    const text = timeAgo(lastLine);
-
-    let node = statusCardNodes.get(key);
-    if (!node) {
-      const card = document.createElement('div');
-      card.className = 'card';
-      card.innerHTML = `
-        <div class="eyebrow">${label}</div>
-        <div class="value"><span class="dot"></span><span class="text"></span></div>
-      `;
-      const dot = card.querySelector('.dot');
-      const textEl = card.querySelector('.text');
-      row.appendChild(card);
-      node = { card, dot, textEl };
-      statusCardNodes.set(key, node);
-    }
-    node.dot.className = 'dot ' + sev;
-    if (node.textEl.textContent !== text) node.textEl.textContent = text;
+    upsertStatusCard(row, key, label, timeAgo(lastLine), severityFromLine(lastLine));
   }
 
-  // Data-flowing uptime: distinct from the log-based cards above —
-  // sourced from /api/status, which derives it from health.log's
-  // last ALERT rather than exposing a separate log endpoint for it.
-  let uptimeText = 'no data yet';
-  let uptimeSev = 'muted';
+  // Data-flowing uptime and container uptime both come from
+  // /api/status (one fetch, two cards) — the former derived from
+  // health.log's last ALERT, the latter from a plain timestamp file
+  // the main container writes at startup. Deliberately two separate
+  // numbers: a container can be "up" while data flow was
+  // interrupted, and that gap is exactly what's worth seeing here.
+  let dataUptimeText = 'no data yet', dataUptimeSev = 'muted';
+  let containerUptimeText = 'no data yet', containerUptimeSev = 'muted';
   try {
     const res = await fetch('/api/status');
     const data = await res.json();
-    const u = data.data_uptime;
-    if (u && u.seconds != null) {
-      uptimeText = formatDuration(u.seconds) + (u.estimated ? ' (est.)' : '');
-      uptimeSev = 'ok';
-    }
-  } catch (e) { /* keep previous value on transient errors */ }
 
-  let uNode = statusCardNodes.get('uptime');
-  if (!uNode) {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="eyebrow">Data-flowing uptime</div>
-      <div class="value"><span class="dot"></span><span class="text"></span></div>
-    `;
-    const dot = card.querySelector('.dot');
-    const textEl = card.querySelector('.text');
-    row.appendChild(card);
-    uNode = { card, dot, textEl };
-    statusCardNodes.set('uptime', uNode);
-  }
-  uNode.dot.className = 'dot ' + uptimeSev;
-  if (uNode.textEl.textContent !== uptimeText) uNode.textEl.textContent = uptimeText;
+    const du = data.data_uptime;
+    if (du && du.seconds != null) {
+      dataUptimeText = formatDuration(du.seconds) + (du.estimated ? ' (est.)' : '');
+      dataUptimeSev = 'ok';
+    }
+
+    const cu = data.container_uptime;
+    if (cu && cu.seconds != null) {
+      containerUptimeText = formatDuration(cu.seconds);
+      containerUptimeSev = 'ok';
+    }
+  } catch (e) { /* keep previous values on transient errors */ }
+
+  upsertStatusCard(row, 'data-uptime', 'Data-flowing uptime', dataUptimeText, dataUptimeSev);
+  upsertStatusCard(row, 'container-uptime', 'Container uptime', containerUptimeText, containerUptimeSev);
 }
 
 // Persistent DOM node cache for the satellite rack, keyed by
