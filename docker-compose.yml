@@ -51,7 +51,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-        
+
   gnss2cloud-web:
     build:
       context: ./web
