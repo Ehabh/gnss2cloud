@@ -153,7 +153,26 @@
   }
 
   /* Signature element: signal-strength bar rack, grouped by constellation */
+  .rack-wrap {
+    display: flex;
+    gap: 10px;
+  }
+
+  .rack-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 140px;
+    padding-bottom: 1px; /* align 0-line with rack's border-bottom */
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    min-width: 28px;
+  }
+
   .rack {
+    flex: 1;
     display: flex;
     align-items: flex-end;
     gap: 3px;
@@ -161,6 +180,14 @@
     padding: 0 2px;
     overflow-x: auto;
     border-bottom: 1px solid var(--border);
+    position: relative;
+    background-image: repeating-linear-gradient(
+      to top,
+      var(--border) 0,
+      var(--border) 1px,
+      transparent 1px,
+      transparent 20%
+    );
   }
 
   .bar-col {
@@ -175,7 +202,7 @@
   .bar {
     width: 10px;
     border-radius: 2px 2px 0 0;
-    transition: height 0.4s ease;
+    transition: height 0.4s ease, opacity 0.4s ease;
   }
 
   .bar-prn {
@@ -215,6 +242,44 @@
     padding: 20px 0;
   }
 
+  .axis-caption {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  /* Polar velocity chart */
+  .polar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+  }
+
+  .polar-readout {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .polar-readout .big {
+    font-size: 20px;
+    color: var(--text);
+  }
+
+  #polar-svg .polar-compass-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    fill: var(--muted);
+  }
+  #polar-svg .polar-scale-label {
+    font-family: var(--mono);
+    font-size: 8px;
+    fill: var(--muted);
+  }
+
   footer {
     max-width: 1100px;
     margin: 0 auto;
@@ -239,10 +304,16 @@
 
   <section class="panel">
     <h2>Satellite signal (CN0)</h2>
-    <div id="sat-rack" class="rack">
-      <div class="empty-state">Waiting for satellite data…</div>
+    <div class="rack-wrap">
+      <div class="rack-axis" id="rack-axis">
+        <span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span>
+      </div>
+      <div id="sat-rack" class="rack">
+        <div class="empty-state">Waiting for satellite data…</div>
+      </div>
     </div>
     <div class="legend" id="legend"></div>
+    <div class="axis-caption">dB-Hz</div>
   </section>
 
   <section class="panel">
@@ -267,6 +338,31 @@
       <div class="telemetry-item">
         <div class="label">Satellites tracked</div>
         <div class="num" id="tm-svcount">—</div>
+      </div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Velocity vector</h2>
+    <div class="polar-wrap">
+      <svg id="polar-svg" viewBox="0 0 200 200" width="200" height="200">
+        <circle cx="100" cy="100" r="85" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <circle cx="100" cy="100" r="56.6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <circle cx="100" cy="100" r="28.3" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <line x1="100" y1="15" x2="100" y2="185" stroke="var(--border)" stroke-width="1"/>
+        <line x1="15" y1="100" x2="185" y2="100" stroke="var(--border)" stroke-width="1"/>
+        <text x="100" y="12" text-anchor="middle" class="polar-compass-label">N</text>
+        <text x="192" y="104" text-anchor="start" class="polar-compass-label">E</text>
+        <text x="100" y="197" text-anchor="middle" class="polar-compass-label">S</text>
+        <text x="8" y="104" text-anchor="end" class="polar-compass-label">W</text>
+        <text id="polar-scale-label" x="102" y="47" class="polar-scale-label"></text>
+        <line id="polar-vector" x1="100" y1="100" x2="100" y2="100"
+              stroke="var(--good)" stroke-width="2.5" stroke-linecap="round" style="transition: x2 0.4s ease, y2 0.4s ease;"/>
+        <circle id="polar-tip" cx="100" cy="100" r="4" fill="var(--good)" style="transition: cx 0.4s ease, cy 0.4s ease;"/>
+      </svg>
+      <div class="polar-readout" id="polar-readout">
+        <div>Resultant speed: <span class="big" id="polar-speed">—</span> km/h</div>
+        <div>Course: <span class="big" id="polar-course">—</span></div>
+        <div id="polar-note" style="max-width:220px;"></div>
       </div>
     </div>
   </section>
@@ -311,9 +407,10 @@ function timeAgo(line) {
   return line || 'no data yet';
 }
 
+const statusCardNodes = new Map(); // key -> { card, dot, text }
+
 async function refreshStatusCards() {
   const row = document.getElementById('status-row');
-  row.innerHTML = '';
   for (const { key, label } of STATUS_LOGS) {
     let lastLine = null;
     try {
@@ -324,51 +421,163 @@ async function refreshStatusCards() {
       lastLine = null;
     }
     const sev = severityFromLine(lastLine);
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.innerHTML = `
-      <div class="eyebrow">${label}</div>
-      <div class="value"><span class="dot ${sev}"></span>${timeAgo(lastLine)}</div>
-    `;
-    row.appendChild(card);
+    const text = timeAgo(lastLine);
+
+    let node = statusCardNodes.get(key);
+    if (!node) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="eyebrow">${label}</div>
+        <div class="value"><span class="dot"></span><span class="text"></span></div>
+      `;
+      const dot = card.querySelector('.dot');
+      const textEl = card.querySelector('.text');
+      row.appendChild(card);
+      node = { card, dot, textEl };
+      statusCardNodes.set(key, node);
+    }
+    node.dot.className = 'dot ' + sev;
+    if (node.textEl.textContent !== text) node.textEl.textContent = text;
   }
 }
+
+// Persistent DOM node cache for the satellite rack, keyed by
+// "talker-prn". Updating existing nodes in place (rather than
+// rebuilding the whole rack via innerHTML on every ~1s broadcast)
+// is what eliminates the flicker — the browser only repaints the
+// specific bars that actually changed, and CSS transitions on
+// height/opacity actually get to run instead of restarting cold
+// every frame.
+const satBarNodes = new Map(); // key -> { col, bar, label }
+let lastLegendTalkers = '';
 
 function renderSatellites(satellites) {
   const rack = document.getElementById('sat-rack');
   const legend = document.getElementById('legend');
 
   if (!satellites || satellites.length === 0) {
-    rack.innerHTML = '<div class="empty-state">Waiting for satellite data…</div>';
+    if (satBarNodes.size > 0) {
+      rack.innerHTML = '<div class="empty-state">Waiting for satellite data…</div>';
+      satBarNodes.clear();
+    }
     legend.innerHTML = '';
+    lastLegendTalkers = '';
     return;
   }
+
+  // Clear the one-time empty-state placeholder, if still present.
+  if (satBarNodes.size === 0) rack.innerHTML = '';
 
   const sorted = [...satellites].sort((a, b) => {
     if (a.talker !== b.talker) return a.talker.localeCompare(b.talker);
     return a.prn.localeCompare(b.prn);
   });
 
-  rack.innerHTML = sorted.map(sat => {
+  const seenKeys = new Set();
+
+  for (const sat of sorted) {
+    const key = `${sat.talker}-${sat.prn}`;
+    seenKeys.add(key);
     const cn0 = sat.cn0 == null ? 0 : sat.cn0;
     const heightPct = Math.max(4, Math.min(100, (cn0 / 50) * 100));
     const color = TALKER_COLORS[sat.talker] || 'var(--muted)';
     const opacity = sat.cn0 == null ? 0.25 : 1;
-    return `
-      <div class="bar-col" title="${sat.talker}-${sat.prn}: ${sat.cn0 ?? 'no signal'} dB-Hz">
-        <div class="bar" style="height:${heightPct}%; background:${color}; opacity:${opacity};"></div>
-        <div class="bar-prn">${sat.prn}</div>
-      </div>
-    `;
-  }).join('');
+    const title = `${sat.talker}-${sat.prn}: ${sat.cn0 ?? 'no signal'} dB-Hz`;
 
-  const seenTalkers = [...new Set(sorted.map(s => s.talker))].filter(t => TALKER_NAMES[t]);
-  legend.innerHTML = seenTalkers.map(t => `
-    <div class="legend-item">
-      <span class="legend-swatch" style="background:${TALKER_COLORS[t]}"></span>
-      ${TALKER_NAMES[t]}
-    </div>
-  `).join('');
+    let node = satBarNodes.get(key);
+    if (!node) {
+      const col = document.createElement('div');
+      col.className = 'bar-col';
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      const label = document.createElement('div');
+      label.className = 'bar-prn';
+      label.textContent = sat.prn;
+      col.appendChild(bar);
+      col.appendChild(label);
+      node = { col, bar, label };
+      satBarNodes.set(key, node);
+    }
+    node.col.title = title;
+    node.bar.style.height = heightPct + '%';
+    node.bar.style.background = color;
+    node.bar.style.opacity = opacity;
+    // appendChild on an already-attached node MOVES it rather than
+    // cloning/recreating it — this keeps sort order correct without
+    // sacrificing the in-place update (and its transition) above.
+    rack.appendChild(node.col);
+  }
+
+  // Drop bars for satellites no longer present in this snapshot.
+  for (const [key, node] of satBarNodes) {
+    if (!seenKeys.has(key)) {
+      node.col.remove();
+      satBarNodes.delete(key);
+    }
+  }
+
+  const seenTalkers = [...new Set(sorted.map(s => s.talker))].filter(t => TALKER_NAMES[t]).sort().join(',');
+  if (seenTalkers !== lastLegendTalkers) {
+    legend.innerHTML = seenTalkers.split(',').filter(Boolean).map(t => `
+      <div class="legend-item">
+        <span class="legend-swatch" style="background:${TALKER_COLORS[t]}"></span>
+        ${TALKER_NAMES[t]}
+      </div>
+    `).join('');
+    lastLegendTalkers = seenTalkers;
+  }
+}
+
+function renderVelocityPolar(vector) {
+  const speedEl = document.getElementById('polar-speed');
+  const courseEl = document.getElementById('polar-course');
+  const noteEl = document.getElementById('polar-note');
+  const vecLine = document.getElementById('polar-vector');
+  const tip = document.getElementById('polar-tip');
+  const scaleLabel = document.getElementById('polar-scale-label');
+
+  const speed = vector?.resultant_speed_kmph;
+  const course = vector?.resultant_course_deg;
+
+  if (speed == null || course == null) {
+    speedEl.textContent = '—';
+    courseEl.textContent = '—';
+    scaleLabel.textContent = '';
+    vecLine.setAttribute('x2', 100);
+    vecLine.setAttribute('y2', 100);
+    tip.setAttribute('cx', 100);
+    tip.setAttribute('cy', 100);
+    noteEl.textContent = 'No valid course in the current window — the receiver omits heading when speed is too low to measure reliably.';
+    return;
+  }
+
+  speedEl.textContent = speed.toFixed(3);
+  courseEl.textContent = course.toFixed(0) + '°';
+
+  // Auto-ranging gauge: the outer ring always represents
+  // speed * 1.4 (never a fixed absolute scale), so the vector tip
+  // sits at a consistent, readable distance from center regardless
+  // of magnitude. The printed scale label is what carries the
+  // actual value — read that, not the needle's raw length.
+  const maxScale = Math.max(speed * 1.4, 0.02);
+  const outerRadius = 85;
+  const r = Math.min(1, speed / maxScale) * outerRadius;
+  const rad = (course * Math.PI) / 180;
+  const x = 100 + r * Math.sin(rad);
+  const y = 100 - r * Math.cos(rad);
+
+  vecLine.setAttribute('x2', x.toFixed(1));
+  vecLine.setAttribute('y2', y.toFixed(1));
+  tip.setAttribute('cx', x.toFixed(1));
+  tip.setAttribute('cy', y.toFixed(1));
+  scaleLabel.textContent = maxScale.toFixed(2) + ' km/h (outer ring)';
+
+  if (speed < STATIONARY_THRESHOLD_KMPH) {
+    noteEl.textContent = 'Below the Doppler noise floor for a stationary antenna — direction shown is not meaningful.';
+  } else {
+    noteEl.textContent = '';
+  }
 }
 
 function renderTelemetry(state) {
@@ -389,6 +598,7 @@ function renderTelemetry(state) {
   document.getElementById('tm-svcount').textContent = state.satellites?.length ?? '—';
 
   renderSatellites(state.satellites);
+  renderVelocityPolar(state.velocity_vector);
 }
 
 function setConnBadge(status) {
