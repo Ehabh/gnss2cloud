@@ -7,6 +7,7 @@ that does arrive is dropped here too, on principle.
 """
 import asyncio
 import json
+import math
 import time
 from collections import deque
 
@@ -21,8 +22,11 @@ from . import config
 _gsv_in_progress: dict[str, dict[str, dict]] = {}  # talker -> {prn: data}
 _last_satellites: dict[str, dict] = {}             # "{talker}-{prn}" -> data
 
-# Rolling (timestamp, speed_kmph) samples for the movement window.
-_speed_samples: deque[tuple[float, float]] = deque()
+# Rolling (timestamp, speed_kmph, course_deg_or_None) samples for the
+# movement window. course is None when VTG reports no valid course
+# (e.g. speed too low for a reliable heading — common for a
+# stationary antenna), not treated as zero.
+_velocity_samples: deque[tuple[float, float, float | None]] = deque()
 
 _last_fix_quality: dict = {}
 _websocket_clients: set = set()
@@ -82,11 +86,17 @@ def _handle_vtg(msg):
     speed_kmph = _to_num(msg.spd_over_grnd_kmph)
     if speed_kmph is None:
         return
+    # True course over ground. Left as None (not 0.0) when VTG omits
+    # it — a stationary/slow receiver often reports no valid heading
+    # at all, and treating that as "heading 0" would fabricate a
+    # direction that was never actually measured.
+    course_deg = _to_num(msg.true_track)
+
     now = time.time()
-    _speed_samples.append((now, speed_kmph))
+    _velocity_samples.append((now, speed_kmph, course_deg))
     cutoff = now - config.MOVEMENT_WINDOW_SECONDS
-    while _speed_samples and _speed_samples[0][0] < cutoff:
-        _speed_samples.popleft()
+    while _velocity_samples and _velocity_samples[0][0] < cutoff:
+        _velocity_samples.popleft()
 
 
 def _handle_gsa(msg):
@@ -107,8 +117,31 @@ def _to_num(v):
 
 
 def _current_state() -> dict:
-    speeds = [s for _, s in _speed_samples]
+    speeds = [s for _, s, _ in _velocity_samples]
     avg_speed = sum(speeds) / len(speeds) if speeds else 0.0
+
+    # Compass-to-cartesian: x = east component, y = north component.
+    # Averaging the vector (not the raw angles) avoids the classic
+    # 359°/1° wraparound bug that a naive mean of course values hits.
+    # Only samples with a valid course contribute — see _handle_vtg.
+    vx_sum = vy_sum = 0.0
+    vector_samples = 0
+    for _, speed, course in _velocity_samples:
+        if course is None:
+            continue
+        rad = math.radians(course)
+        vx_sum += speed * math.sin(rad)
+        vy_sum += speed * math.cos(rad)
+        vector_samples += 1
+
+    if vector_samples:
+        vx = vx_sum / vector_samples
+        vy = vy_sum / vector_samples
+        resultant_speed = math.hypot(vx, vy)
+        resultant_course = math.degrees(math.atan2(vx, vy)) % 360
+    else:
+        vx = vy = resultant_speed = resultant_course = None
+
     # Noise-floor note (flagged earlier): a stationary receiver shows
     # small nonzero speed from Doppler noise. Surface the raw value;
     # let the frontend apply the "essentially stationary" threshold
@@ -119,6 +152,13 @@ def _current_state() -> dict:
             "avg_speed_kmph": round(avg_speed, 2),
             "window_seconds": config.MOVEMENT_WINDOW_SECONDS,
             "sample_count": len(speeds),
+        },
+        "velocity_vector": {
+            "x_kmph": round(vx, 3) if vx is not None else None,
+            "y_kmph": round(vy, 3) if vy is not None else None,
+            "resultant_speed_kmph": round(resultant_speed, 3) if resultant_speed is not None else None,
+            "resultant_course_deg": round(resultant_course, 1) if resultant_course is not None else None,
+            "sample_count": vector_samples,
         },
         "fix_quality": _last_fix_quality,
         "updated_at": time.time(),
