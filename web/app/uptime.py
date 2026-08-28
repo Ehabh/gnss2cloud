@@ -8,6 +8,7 @@ Docker socket — a door this project keeps closed by design). A
 container can be "up" while the device handle is stale; this metric
 tracks the thing that actually matters operationally.
 """
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -76,3 +77,24 @@ def compute_data_uptime() -> dict:
             "estimated": True,
         }
     return {"since_epoch": None, "seconds": None, "estimated": False}
+
+
+def compute_container_uptime() -> dict:
+    """Main (gnss2cloud) container uptime — read from a plain text
+    file the entrypoint writes once at startup, NOT from the Docker
+    API. Deliberately avoids the Docker socket, which this project
+    keeps out of the web container by design — a compromised
+    monitoring container should never be able to query, let alone
+    control, other containers.
+    """
+    path = os.path.join(config.LOG_DIR, "started_at")
+    try:
+        with open(path, "r") as f:
+            started_at = float(f.read().strip())
+    except (FileNotFoundError, ValueError, OSError):
+        return {"since_epoch": None, "seconds": None}
+
+    return {
+        "since_epoch": started_at,
+        "seconds": round(time.time() - started_at),
+    }
