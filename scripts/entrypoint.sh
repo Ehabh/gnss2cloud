@@ -77,7 +77,7 @@ case "${NMEA_SOURCE_MODE}" in
         # else was ever enabled on it — see docs/receiver-setup.md),
         # so no filtering relay is needed here: this stream never
         # contains raw binary observables to begin with.
-        str2str -in "serial://${NMEA_DEVICE_PATH}:${NMEA_BAUD:-9600}" \
+        str2str -in "serial://${NMEA_DEVICE_PATH#/dev/}:${NMEA_BAUD:-9600}" \
             -out "tcpsvr://:${NMEA_INTERNAL_PORT}" \
             < /dev/null >> /data/logs/nmea_stream.log 2>&1 &
         ;;
