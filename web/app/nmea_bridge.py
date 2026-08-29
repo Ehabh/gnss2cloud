@@ -209,13 +209,38 @@ async def run_bridge():
                     _handle_gsv(msg)
                 elif sentence == "VTG":
                     _handle_vtg(msg)
-                    await _broadcast()
                 elif sentence == "GSA":
                     _handle_gsa(msg)
+                # No broadcast here — see broadcast_loop() below. Tying
+                # the UI refresh to VTG specifically meant the whole
+                # dashboard (including GSV/GSA-derived data) silently
+                # stalled whenever VTG became infrequent, which this
+                # receiver has already done more than once this
+                # project (frozen-COG suppression, config not
+                # surviving a power cycle). Decoupling the two means
+                # a VTG hiccup no longer takes the entire UI down
+                # with it.
 
         except (ConnectionRefusedError, OSError):
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30)
+
+
+BROADCAST_INTERVAL_SECONDS = 1
+
+
+async def broadcast_loop():
+    """Pushes the current state to all connected clients on a fixed
+    interval, independent of which NMEA sentence last arrived. Runs
+    forever alongside run_bridge(); never raises out of the loop for
+    the same reason run_bridge() doesn't — a transient issue here
+    should never take down the rest of the backend."""
+    while True:
+        await asyncio.sleep(BROADCAST_INTERVAL_SECONDS)
+        try:
+            await _broadcast()
+        except Exception:
+            pass
 
 
 def register_client(ws):
