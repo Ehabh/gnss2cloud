@@ -159,10 +159,7 @@ figures — how long the receiver's data has been flowing without
 interruption, and how long the main container has been running.
 
 **What it deliberately does not do:** transmit, store, or display
-*position*. Only NMEA GSV, VTG, and GSA sentences are ever used —
-GGA and RMC (the sentences that carry lat/lon) are never enabled on
-the monitoring stream in the first place, at the receiver level, not
-just filtered downstream.
+*position*. Currently only NMEA GSV, VTG, and GSA sentences are used.
 
 ### Enabling it
 
@@ -193,9 +190,8 @@ reach. Two supported modes, both `.env`-driven:
   **not yet tested against real hardware**.
 
 See `docs/receiver-setup.md` for per-receiver configuration steps —
-**enabling GSV/VTG/GSA output at the receiver requires explicitly
-disabling GGA/RMC/GLL/ZDA on the same port** (not just leaving them
-off by default), and saving the configuration to the receiver's flash
+**enabling GSV/VTG/GSA output at the receiver &
+disabling GGA/RMC/GLL/ZDA on the same port**, and saving the configuration to the receiver's flash
 memory, not just the live session.
 
 ### Security model
