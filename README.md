@@ -26,6 +26,10 @@ been validated.
 6. Runs a health check every 5 minutes and reports (does not silently
    auto-fix) anomalies, such as: receiver disconnected, process stuck, no data
    flowing.
+7. **Optionally** runs a read-only web dashboard, with station status, live
+   satellite CN0, and a stationary-aware movement indicator, as a
+   separate, opt-in container. See
+   [Web dashboard](#web-dashboard-optional-monitoring-only) below.
 
 Everything above runs unattended, inside a single container, as an
 unprivileged user, no root process runs at any point after the image is
@@ -63,9 +67,21 @@ built.
   issue). Retention cleanup was confirmed working correctly against
   live data with the new upload-state-cache logic, deleting local
   files only after both remotes confirmed a copy.
+- **Web dashboard** (`gnss2cloud-web`, optional, `profiles: ["web"]`):
+  validated end-to-end against a live u-blox SimpleRTK2B in
+  `NMEA_SOURCE_MODE=shared` — filtered NMEA fan-out (GSV/VTG/GSA
+  only), REST log/status API, WebSocket live feed, and both uptime
+  indicators all confirmed against real hardware, including a full
+  RINEX-integrity check to confirm the fan-out doesn't affect the
+  archival pipeline. **`NMEA_SOURCE_MODE=dedicated` (separate NMEA
+  port/adapter) is implemented but not yet hands-on tested.**
+  **NovAtel and Septentrio have not been tested against the dashboard
+  at all** — see [Known limitations](#known-limitations).
 
 **Not yet implemented:** push notifications (e.g. ntfy.sh) for health
-alerts — currently alerts are written to `logs/health.log` only. See
+alerts — currently alerts are written to `logs/health.log` only.
+Authentication for the web dashboard is also not yet implemented — see
+[Web dashboard](#web-dashboard-optional-monitoring-only) and
 [Known limitations](#known-limitations) below.
 
 ## Compression
@@ -128,6 +144,86 @@ running several stations against the same provider account multiplies
 the load. Check your provider's transaction/API quota dashboard
 (e.g. Backblaze B2's "Caps & Alerts" page) if running more than a
 handful of stations on one account.
+
+## Web dashboard (optional, monitoring only)
+
+A read-only monitoring dashboard, packaged as a **separate, opt-in
+container** (`gnss2cloud-web`) so it never runs, and never affects
+the core pipeline, unless explicitly enabled.
+
+**What it shows:** station status (health/upload/retention/conversion,
+each pulled straight from the existing logs), live per-satellite CN0
+grouped by constellation, a stationary-aware movement indicator
+(speed + course, shown as a compass-style polar plot), and two uptime
+figures — how long the receiver's data has been flowing without
+interruption, and how long the main container has been running.
+
+**What it deliberately does not do:** transmit, store, or display
+*position*. Only NMEA GSV, VTG, and GSA sentences are ever used —
+GGA and RMC (the sentences that carry lat/lon) are never enabled on
+the monitoring stream in the first place, at the receiver level, not
+just filtered downstream.
+
+### Enabling it
+
+```bash
+docker compose --profile web up -d
+```
+
+Requires `NMEA_SOURCE_MODE` set in `.env` (see below) — without it,
+the dashboard runs but its live satellite/movement panel stays empty,
+since the main container has nothing to fan out.
+
+### NMEA source modes
+
+The receiver needs to emit GSV/VTG/GSA somewhere the dashboard can
+reach. Two supported modes, both `.env`-driven:
+
+- **`NMEA_SOURCE_MODE=shared`** — receiver puts NMEA on the *same*
+  port as raw capture (the common case for a single-USB-port
+  receiver, e.g. u-blox). A local filter relay
+  (`grep`+`socat`) ensures only GSV/VTG/GSA ever reach the internal
+  network port, even though the underlying stream is shared — the
+  raw archival capture itself is completely unaffected. **This is the
+  only mode validated so far.**
+- **`NMEA_SOURCE_MODE=dedicated`** — receiver has a genuinely separate
+  NMEA-only port or virtual port (`NMEA_DEVICE_PATH`), e.g. via a
+  UART-to-USB adapter, or a receiver whose USB interface exposes
+  multiple independent virtual ports (Septentrio-style). Implemented,
+  **not yet tested against real hardware**.
+
+See `docs/receiver-setup.md` for per-receiver configuration steps —
+**enabling GSV/VTG/GSA output at the receiver requires explicitly
+disabling GGA/RMC/GLL/ZDA on the same port** (not just leaving them
+off by default), and saving the configuration to the receiver's flash
+memory, not just the live session.
+
+### Security model
+
+- **No credentials, no `.env`, no `rclone.conf`, no Docker socket** —
+  the web container has none of these, by design. A compromise here
+  cannot reach cloud credentials or control other containers.
+- **Read-only mount of `./data/logs` only** (`:ro`) — never the full
+  `./data` tree. Raw captures and RINEX output stay inaccessible to
+  this container even under compromise.
+- **Not published to the host by default** (`expose`, not `ports`) —
+  reachable only from other containers on the compose network. Put a
+  reverse proxy (TLS + at minimum HTTP basic auth) in front before
+  any access beyond a trusted local network.
+- **Authentication is not yet implemented.** An inert auth seam exists
+  (`WEB_AUTH_ENABLED`, default off) so real auth can be added later
+  without restructuring routes, but until then: **treat this service
+  as trusted-network-only.**
+
+### Relevant `.env` variables
+
+```
+NMEA_SOURCE_MODE=none        # none | shared | dedicated
+NMEA_INTERNAL_PORT=5015
+NMEA_DEVICE_PATH=            # dedicated mode only
+NMEA_BAUD=9600                # dedicated mode only
+WEB_AUTH_ENABLED=false        # inert today — see Security model above
+```
 
 ## Prerequisites
 
@@ -227,6 +323,16 @@ ls -la /dev/gnss0
    docker compose logs -f
    ```
 
+7. **Optional — web dashboard.** Set `NMEA_SOURCE_MODE` in `.env`
+   first (see [Web dashboard](#web-dashboard-optional-monitoring-only)),
+   then:
+   ```bash
+   docker compose --profile web up -d
+   ```
+   Not published to the host by default — see
+   [Web dashboard](#web-dashboard-optional-monitoring-only) for the
+   security model before exposing it further.
+
 ## Verifying it's working
 
 ```bash
@@ -292,6 +398,23 @@ configuration differs.
   file is ever deleted out-of-band (manually, or by a future change),
   its markers would be orphaned in `logs/upload_state/` — harmless
   (just unused disk space) but not currently swept up separately.
+- **Web dashboard has no authentication.** `WEB_AUTH_ENABLED` exists
+  as an inert seam, not a working login system — see
+  [Web dashboard](#web-dashboard-optional-monitoring-only).
+- **Web dashboard's WebSocket endpoint has no rate limit or
+  max-connection cap.** Low risk on a trusted network, worth adding
+  before any wider exposure.
+- **Satellites that drop out of view never expire from the
+  dashboard's in-memory state** — the NMEA bridge publishes whatever
+  it last saw per satellite and has no expiry/staleness logic, so a
+  satellite that's no longer tracked can persist in the display
+  indefinitely until the web container restarts.
+- **`NMEA_SOURCE_MODE=dedicated` is untested** against real hardware
+  — implemented, reviewed, but no adapter-based or multi-virtual-port
+  receiver has exercised this path yet.
+- **Web dashboard has not been tested against NovAtel or Septentrio**
+  at all (separately from the main pipeline's own NovAtel/Septentrio
+  gap noted above).
 
 ## Roadmap
 
@@ -300,10 +423,27 @@ configuration differs.
   preserve the redundancy guarantee.
 - **ARM/Raspberry Pi validation** for the compression pipeline
   specifically (validated on x86_64 so far).
-- **Live C/N0 + position dashboard**, fanning out the receiver stream
-  via `str2str`'s multi-output support alongside the existing hourly
-  recording, without disturbing it.
 - **`CHANGELOG.md`** tracking version history going forward.
+- **Web dashboard follow-ups** (see
+  [Web dashboard](#web-dashboard-optional-monitoring-only) and
+  [Known limitations](#known-limitations)):
+  - Validate against Septentrio hardware (expected soon), including
+    whether it fits `NMEA_SOURCE_MODE=dedicated` more naturally than
+    `shared`, given Septentrio's multi-virtual-USB-port support.
+  - Hands-on test of `NMEA_SOURCE_MODE=dedicated` in general (UART
+    adapter-based).
+  - Real authentication behind `WEB_AUTH_ENABLED`, plus activating
+    the currently-inert security-event logging sink
+    (`logs/security_events.log`) — both scaffolded in anticipation of
+    **EU RED / EN 18031** conformance, in case this project's scope
+    ever changes to require it (not currently believed to apply — see
+    inline code comments in `web/app/security.py`).
+  - Reverse proxy + TLS/basic-auth documentation for any deployment
+    beyond a trusted local network.
+  - Rate limiting / max-connection cap on the WebSocket endpoint.
+  - Trivy vulnerability scan covering **both** images
+    (`gnss2cloud` and `gnss2cloud-web`) — done ad hoc for a prior
+    release, not yet re-run for this branch or formalized as CI.
 
 ## Acknowledgments
 
@@ -319,6 +459,18 @@ with additional help at various points from
 [Microsoft Copilot](https://copilot.microsoft.com),
 [Google AI Mode](https://support.google.com/websearch/answer/14901683),
 and Brave's [Leo](https://brave.com/leo/).
+
+## A note on validation
+
+This project has been tested in the ways described throughout this
+README — but "tested" here means real use on the hardware and
+platforms listed in [Tested status](#tested-status), not formal or
+independent certification. Configurations, receivers, or environments
+outside what's documented as tested may behave differently. If you're
+relying on this for something where correctness matters, it's worth
+validating it against your own setup before trusting it in production
+— the same way this project's own testing surfaced real bugs that
+weren't obvious from code review alone.
 
 ## License
 
