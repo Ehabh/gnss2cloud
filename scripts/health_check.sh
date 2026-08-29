@@ -16,6 +16,12 @@ RAW_DIR="/data/raw"
 LOG_FILE="/data/logs/health.log"
 MAX_STALE_MINUTES=15
 
+case "${GNSS_FORMAT:-}" in
+    nov) RAW_EXT="gps" ;;
+    sbf) RAW_EXT="sbf" ;;
+    *)   RAW_EXT="ubx" ;;
+esac
+
 # 1. Is the receiver connected?
 if [ ! -e "$DEVICE" ]; then
     echo "$(date): ALERT - $DEVICE does not exist. Receiver appears disconnected." >> "$LOG_FILE"
@@ -39,7 +45,7 @@ if ! ls -l /proc/1/fd 2>/dev/null | grep -q "$real_device"; then
 fi
 
 # 4. Is data actually recent?
-latest_file=$(find "$RAW_DIR" -name "*.ubx" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+latest_file=$(find "$RAW_DIR" -name "*.${RAW_EXT}" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
 
 if [ -z "$latest_file" ] || [ -z "$(find "$latest_file" -mmin -$MAX_STALE_MINUTES)" ]; then
     echo "$(date): ALERT - Device handle open but no recent data. Latest file: $latest_file" >> "$LOG_FILE"
