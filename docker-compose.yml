@@ -20,6 +20,7 @@ services:
     environment:
       - GNSS_DEVICE=gnss0
       - GNSS_BAUD=${GNSS_BAUD:-460800}
+      - GNSS_FORMAT=${GNSS_FORMAT:-}
       - STATION_NAME=${STATION_NAME:-station01}
       - REMOTE_STORAGE_1=${REMOTE_STORAGE_1}
       - REMOTE_STORAGE_2=${REMOTE_STORAGE_2}
