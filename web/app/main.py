@@ -55,6 +55,13 @@ async def start_background_tasks():
         config.NMEA_PORT,
     )
 
+    # Separate from the bridge on purpose: broadcasting used to be
+    # triggered only by VTG arrival, which meant the whole dashboard
+    # stalled whenever VTG became infrequent (this receiver has done
+    # that more than once). A fixed-interval loop means GSV/GSA-derived
+    # data keeps refreshing even if VTG specifically has issues again.
+    app.state.broadcast_task = asyncio.create_task(nmea_bridge.broadcast_loop())
+
 
 @app.on_event("shutdown")
 async def stop_background_tasks():
@@ -63,13 +70,14 @@ async def stop_background_tasks():
     # but asyncio logs "Task was destroyed but it is pending!" on
     # every restart, which is noise worth eliminating rather than
     # learning to ignore.
-    task = getattr(app.state, "bridge_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+    for attr in ("bridge_task", "broadcast_task"):
+        task = getattr(app.state, attr, None)
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
 
 @app.get("/api/status")
