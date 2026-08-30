@@ -10,6 +10,7 @@ services:
 
     devices:
       - /dev/gnss0:/dev/gnss0
+      - ${NMEA_DEVICE_PATH:-/dev/null}:${NMEA_DEVICE_PATH:-/dev/null}
 
     # Grants access to the host's dialout group so the container's 'gnss'
     # user can open the serial device. Find your host's GID with:
