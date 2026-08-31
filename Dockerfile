@@ -20,11 +20,15 @@ RUN cd /opt/RNXCMP/source \
 RUN curl https://rclone.org/install.sh | bash
 
 # --- supercronic: non-root cron replacement (no root daemon needed) ---
-ARG TARGETARCH
+# Built from source against Docker's official golang:1.26-bookworm
+# image (patched minor-version tag, auto-refreshes on rebuild) rather
+# than pulling the stale prebuilt v0.2.48 release binary, which still
+# ships a vulnerable Go stdlib with no newer release available upstream
+# to bump to — see docs/tested-status.md.
+FROM golang:1.26-bookworm AS supercronic-builder
 ARG SUPERCRONIC_VERSION=v0.2.48
-RUN curl -fsSL -o /usr/local/bin/supercronic \
-    "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${TARGETARCH}" \
-    && chmod +x /usr/local/bin/supercronic
+RUN GOBIN=/usr/local/bin go install \
+    "github.com/aptible/supercronic@${SUPERCRONIC_VERSION}"
 
 # ==========================================================================
 FROM debian:bookworm-slim
@@ -41,7 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /opt/RTKLIB/app/consapp/str2str/gcc/str2str /usr/local/bin/str2str
 COPY --from=builder /opt/RTKLIB/app/consapp/convbin/gcc/convbin /usr/local/bin/convbin
 COPY --from=builder /usr/bin/rclone /usr/local/bin/rclone
-COPY --from=builder /usr/local/bin/supercronic /usr/local/bin/supercronic
+COPY --from=supercronic-builder /usr/local/bin/supercronic /usr/local/bin/supercronic
 COPY --from=builder /opt/RNXCMP/source/rnx2crx /usr/local/bin/rnx2crx
 COPY --from=builder /opt/RNXCMP/source/crx2rnx /usr/local/bin/crx2rnx
 
