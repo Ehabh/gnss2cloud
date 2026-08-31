@@ -86,8 +86,20 @@ All three fixed and merged:
    data. Fixed by deriving the expected extension from `GNSS_FORMAT`,
    the same mapping `entrypoint.sh` already used.
 
-**Not yet implemented:** push notifications (e.g. ntfy.sh) for health
-alerts — currently alerts are written to `logs/health.log` only.
-Authentication for the web dashboard is also not yet implemented — see
-[Web dashboard](../README.md#web-dashboard-optional-monitoring-only)
+
+## Container image security scanning
+
+Both container images (`gnss2cloud` and `gnss2cloud-web`) are
+periodically scanned with [Trivy](https://trivy.dev). Findings are
+tracked and addressed as feasible, most recently, the `gnss2cloud-web`
+image's OS and Python dependencies were fully remediated, and one of
+two flagged Go binaries in the `gnss2cloud` image was fixed by
+building from source against a current Go toolchain rather than a
+stale prebuilt release. One component's fix is currently pending an
+upstream release and is being tracked for a follow-up rebuild once
+available — see `CHANGELOG.md` for specifics once that lands.
+
+## Not yet implemented 
+Push notifications (e.g. ntfy.sh) for health alerts — currently alerts are written to `logs/health.log` only.
+Authentication for the web dashboard is also not yet implemented — see [Web dashboard](../README.md#web-dashboard-optional-monitoring-only)
 and [Known limitations](../README.md#known-limitations).
