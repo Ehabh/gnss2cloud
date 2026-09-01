@@ -224,11 +224,10 @@ and Arch Linux.
 3. Place your working `rclone.conf` in the project root (referenced by
    `RCLONE_CONFIG` in `.env`, default `./rclone.conf`). ** only an example is available**
 
-4. Pre-create the data directories with correct ownership (Docker
-   auto-creates them as `root` on first run otherwise, which the
-   container's non-root user can't write to):
+4. Starting v0.5.0, `data/raw`, `data/rinex`, and `data/logs` are present after
+   cloning (tracked via `.gitkeep`). If your `PUID`/`PGID` don't match
+   the user you cloned as, fix ownership before starting the container:
 ```bash
-   mkdir -p data/raw data/rinex data/logs
    sudo chown -R ${PUID:-1000}:${PGID:-1000} data/
 ```
 
