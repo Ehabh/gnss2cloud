@@ -262,6 +262,10 @@ and `ttyACM1` — rather than a single multiplexed port like u-blox.
 Both carry the receiver's interactive command shell (prompt `USBn>`)
 until you configure output streams on them.
 
+For the udev rule to get a stable device path for both ports, see "Septentrio" under
+[Receiver-specific notes](host-setup.md#receiver-specific-notes) in
+docs/host-setup.md.
+
 Connect with a serial terminal (`picocom`/`minicom`) at any baud —
 USB CDC connections don't actually enforce the baud number, it's a
 formality:
