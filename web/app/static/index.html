@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gnss2cloud — station monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0E11;
+    --panel: #12161B;
+    --border: #1E252C;
+    --text: #E6EDF3;
+    --muted: #7C8896;
+    --good: #4FD1C5;
+    --warn: #E8A33D;
+    --alert: #E25555;
+    --gp: #4FD1C5;
+    --gl: #6E9BE8;
+    --ga: #C792EA;
+    --gb: #E8A33D;
+    --gq: #7C8896;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Inter', sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  header h1 {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    margin: 0;
+    color: var(--text);
+  }
+
+  header h1 span { color: var(--muted); }
+
+  .conn-badge {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .conn-badge.live { color: var(--good); border-color: var(--good); }
+  .conn-badge.down { color: var(--alert); border-color: var(--alert); }
+
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 28px 60px;
+  }
+
+  .status-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 18px;
+  }
+
+  .card .eyebrow {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .card .value {
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+    background: var(--muted);
+  }
+  .dot.ok { background: var(--good); }
+  .dot.warn { background: var(--warn); }
+  .dot.alert { background: var(--alert); }
+
+  section.panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+  }
+
+  section.panel h2 {
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin: 0 0 16px;
+    font-weight: 500;
+  }
+
+  .telemetry-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+
+  .telemetry-item .label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .telemetry-item .num {
+    font-family: var(--mono);
+    font-size: 22px;
+  }
+  .telemetry-item .unit {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  /* Signature element: signal-strength bar rack, grouped by constellation */
+  .rack-wrap {
+    display: flex;
+    gap: 10px;
+  }
+
+  .rack-axis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 140px;
+    padding-bottom: 1px; /* align 0-line with rack's border-bottom */
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    min-width: 28px;
+  }
+
+  .rack {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 140px;
+    padding: 0 2px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    background-image: repeating-linear-gradient(
+      to top,
+      var(--border) 0,
+      var(--border) 1px,
+      transparent 1px,
+      transparent 20%
+    );
+  }
+
+  .bar-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    min-width: 14px;
+  }
+
+  .bar {
+    width: 10px;
+    border-radius: 2px 2px 0 0;
+    transition: height 0.4s ease, opacity 0.4s ease;
+  }
+
+  .bar-prn {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 6px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    max-height: 40px;
+  }
+
+  .legend {
+    display: flex;
+    gap: 18px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .legend-swatch {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+  }
+
+  .empty-state {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 20px 0;
+  }
+
+  .axis-caption {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  /* Polar velocity chart */
+  .polar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    flex-wrap: wrap;
+  }
+
+  .polar-readout {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .polar-readout .big {
+    font-size: 20px;
+    color: var(--text);
+  }
+
+  #polar-svg .polar-compass-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    fill: var(--muted);
+  }
+  #polar-svg .polar-scale-label {
+    font-family: var(--mono);
+    font-size: 8px;
+    fill: var(--muted);
+  }
+
+  footer {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 28px 40px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>gnss2cloud <span>/ station monitor</span></h1>
+  <div class="conn-badge" id="conn-badge">connecting…</div>
+</header>
+
+<main>
+
+  <div class="status-row" id="status-row">
+    <!-- populated from /api/logs/* -->
+  </div>
+
+  <section class="panel">
+    <h2>Satellite signal (CN0)</h2>
+    <div class="rack-wrap">
+      <div class="rack-axis" id="rack-axis">
+        <span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>0</span>
+      </div>
+      <div id="sat-rack" class="rack">
+        <div class="empty-state">Waiting for satellite data…</div>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="axis-caption">dB-Hz</div>
+  </section>
+
+  <section class="panel">
+    <h2>Receiver telemetry</h2>
+    <div class="telemetry-row">
+      <div class="telemetry-item">
+        <div class="label">Speed (60s avg)</div>
+        <div class="num" id="tm-speed">—<span class="unit">km/h</span></div>
+      </div>
+      <div class="telemetry-item">
+        <div class="label">Fix type</div>
+        <div class="num" id="tm-fix">—</div>
+      </div>
+      <div class="telemetry-item">
+        <div class="label">PDOP</div>
+        <div class="num" id="tm-pdop">—</div>
+      </div>
+      <div class="telemetry-item">
+        <div class="label">HDOP</div>
+        <div class="num" id="tm-hdop">—</div>
+      </div>
+      <div class="telemetry-item">
+        <div class="label">Satellites tracked</div>
+        <div class="num" id="tm-svcount">—</div>
+      </div>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Velocity vector</h2>
+    <div class="polar-wrap">
+      <svg id="polar-svg" viewBox="0 0 200 200" width="200" height="200">
+        <circle cx="100" cy="100" r="85" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <circle cx="100" cy="100" r="56.6" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <circle cx="100" cy="100" r="28.3" fill="none" stroke="var(--border)" stroke-width="1"/>
+        <line x1="100" y1="15" x2="100" y2="185" stroke="var(--border)" stroke-width="1"/>
+        <line x1="15" y1="100" x2="185" y2="100" stroke="var(--border)" stroke-width="1"/>
+        <text x="100" y="12" text-anchor="middle" class="polar-compass-label">N</text>
+        <text x="192" y="104" text-anchor="start" class="polar-compass-label">E</text>
+        <text x="100" y="197" text-anchor="middle" class="polar-compass-label">S</text>
+        <text x="8" y="104" text-anchor="end" class="polar-compass-label">W</text>
+        <text id="polar-scale-label" x="102" y="47" class="polar-scale-label"></text>
+        <line id="polar-vector" x1="100" y1="100" x2="100" y2="100"
+              stroke="var(--good)" stroke-width="2.5" stroke-linecap="round" style="transition: x2 0.4s ease, y2 0.4s ease;"/>
+        <circle id="polar-tip" cx="100" cy="100" r="4" fill="var(--good)" style="transition: cx 0.4s ease, cy 0.4s ease;"/>
+      </svg>
+      <div class="polar-readout" id="polar-readout">
+        <div>Resultant speed: <span class="big" id="polar-speed">—</span> km/h</div>
+        <div>Course: <span class="big" id="polar-course">—</span></div>
+        <div id="polar-note" style="max-width:220px;"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  gnss2cloud — monitoring only. Position is not transmitted or displayed by design.
+</footer>
+
+<script>
+const TALKER_COLORS = {
+  GP: 'var(--gp)', GL: 'var(--gl)', GA: 'var(--ga)', GB: 'var(--gb)', GQ: 'var(--gq)', GN: 'var(--muted)'
+};
+const TALKER_NAMES = {
+  GP: 'GPS', GL: 'GLONASS', GA: 'Galileo', GB: 'BeiDou', GQ: 'QZSS'
+};
+const FIX_LABELS = { '1': 'No fix', '2': '2D', '3': '3D' };
+// Doppler noise floor for a stationary antenna — below this, treat
+// speed as receiver noise, not real movement. See docs/receiver-setup.md.
+const STATIONARY_THRESHOLD_KMPH = 0.05;
+
+const STATUS_LOGS = [
+  { key: 'health', label: 'Device health' },
+  { key: 'upload', label: 'Upload' },
+  { key: 'retention', label: 'Retention' },
+  { key: 'convert', label: 'Conversion' },
+];
+
+function formatDuration(seconds) {
+  if (seconds == null) return 'no data yet';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function severityFromLine(line) {
+  if (!line) return 'muted';
+  const upper = line.toUpperCase();
+  if (upper.includes('ALERT') || upper.includes('ERROR') || upper.includes('FAIL')) return 'alert';
+  if (upper.includes('WARN')) return 'warn';
+  if (upper.includes('OK') || upper.includes('CONFIRMED') || upper.includes('SUCCESS') || upper.includes('CONVERTED')) return 'ok';
+  return 'muted';
+}
+
+function timeAgo(line) {
+  // Logs are plain text with a leading timestamp; just show the raw
+  // tail of the last line rather than parsing every log's own format.
+  return line || 'no data yet';
+}
+
+const statusCardNodes = new Map(); // key -> { card, dot, text }
+
+// Shared card upsert: creates the card on first use, updates its
+// dot/text in place on every subsequent call (no full teardown —
+// same reasoning as the satellite rack fix above).
+function upsertStatusCard(row, key, label, text, sev) {
+  let node = statusCardNodes.get(key);
+  if (!node) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="eyebrow">${label}</div>
+      <div class="value"><span class="dot"></span><span class="text"></span></div>
+    `;
+    const dot = card.querySelector('.dot');
+    const textEl = card.querySelector('.text');
+    row.appendChild(card);
+    node = { card, dot, textEl };
+    statusCardNodes.set(key, node);
+  }
+  node.dot.className = 'dot ' + sev;
+  if (node.textEl.textContent !== text) node.textEl.textContent = text;
+}
+
+async function refreshStatusCards() {
+  const row = document.getElementById('status-row');
+  for (const { key, label } of STATUS_LOGS) {
+    let lastLine = null;
+    try {
+      const res = await fetch(`/api/logs/${key}?lines=1`);
+      const data = await res.json();
+      lastLine = data.lines && data.lines.length ? data.lines[data.lines.length - 1] : null;
+    } catch (e) {
+      lastLine = null;
+    }
+    upsertStatusCard(row, key, label, timeAgo(lastLine), severityFromLine(lastLine));
+  }
+
+  // Data-flowing uptime and container uptime both come from
+  // /api/status (one fetch, two cards) — the former derived from
+  // health.log's last ALERT, the latter from a plain timestamp file
+  // the main container writes at startup. Deliberately two separate
+  // numbers: a container can be "up" while data flow was
+  // interrupted, and that gap is exactly what's worth seeing here.
+  let dataUptimeText = 'no data yet', dataUptimeSev = 'muted';
+  let containerUptimeText = 'no data yet', containerUptimeSev = 'muted';
+  try {
+    const res = await fetch('/api/status');
+    const data = await res.json();
+
+    const du = data.data_uptime;
+    if (du && du.seconds != null) {
+      dataUptimeText = formatDuration(du.seconds) + (du.estimated ? ' (est.)' : '');
+      dataUptimeSev = 'ok';
+    }
+
+    const cu = data.container_uptime;
+    if (cu && cu.seconds != null) {
+      containerUptimeText = formatDuration(cu.seconds);
+      containerUptimeSev = 'ok';
+    }
+  } catch (e) { /* keep previous values on transient errors */ }
+
+  upsertStatusCard(row, 'data-uptime', 'Data-flowing uptime', dataUptimeText, dataUptimeSev);
+  upsertStatusCard(row, 'container-uptime', 'Container uptime', containerUptimeText, containerUptimeSev);
+}
+
+// Persistent DOM node cache for the satellite rack, keyed by
+// "talker-prn". Updating existing nodes in place (rather than
+// rebuilding the whole rack via innerHTML on every ~1s broadcast)
+// is what eliminates the flicker — the browser only repaints the
+// specific bars that actually changed, and CSS transitions on
+// height/opacity actually get to run instead of restarting cold
+// every frame.
+const satBarNodes = new Map(); // key -> { col, bar, label }
+let lastLegendTalkers = '';
+
+function renderSatellites(satellites) {
+  const rack = document.getElementById('sat-rack');
+  const legend = document.getElementById('legend');
+
+  if (!satellites || satellites.length === 0) {
+    if (satBarNodes.size > 0) {
+      rack.innerHTML = '<div class="empty-state">Waiting for satellite data…</div>';
+      satBarNodes.clear();
+    }
+    legend.innerHTML = '';
+    lastLegendTalkers = '';
+    return;
+  }
+
+  // Clear the one-time empty-state placeholder, if still present.
+  if (satBarNodes.size === 0) rack.innerHTML = '';
+
+  const sorted = [...satellites].sort((a, b) => {
+    if (a.talker !== b.talker) return a.talker.localeCompare(b.talker);
+    return a.prn.localeCompare(b.prn);
+  });
+
+  const seenKeys = new Set();
+
+  for (const sat of sorted) {
+    const key = `${sat.talker}-${sat.prn}`;
+    seenKeys.add(key);
+    const cn0 = sat.cn0 == null ? 0 : sat.cn0;
+    const heightPct = Math.max(4, Math.min(100, (cn0 / 50) * 100));
+    const color = TALKER_COLORS[sat.talker] || 'var(--muted)';
+    const opacity = sat.cn0 == null ? 0.25 : 1;
+    const title = `${sat.talker}-${sat.prn}: ${sat.cn0 ?? 'no signal'} dB-Hz`;
+
+    let node = satBarNodes.get(key);
+    if (!node) {
+      const col = document.createElement('div');
+      col.className = 'bar-col';
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      const label = document.createElement('div');
+      label.className = 'bar-prn';
+      label.textContent = sat.prn;
+      col.appendChild(bar);
+      col.appendChild(label);
+      node = { col, bar, label };
+      satBarNodes.set(key, node);
+    }
+    node.col.title = title;
+    node.bar.style.height = heightPct + '%';
+    node.bar.style.background = color;
+    node.bar.style.opacity = opacity;
+    // appendChild on an already-attached node MOVES it rather than
+    // cloning/recreating it — this keeps sort order correct without
+    // sacrificing the in-place update (and its transition) above.
+    rack.appendChild(node.col);
+  }
+
+  // Drop bars for satellites no longer present in this snapshot.
+  for (const [key, node] of satBarNodes) {
+    if (!seenKeys.has(key)) {
+      node.col.remove();
+      satBarNodes.delete(key);
+    }
+  }
+
+  const seenTalkers = [...new Set(sorted.map(s => s.talker))].filter(t => TALKER_NAMES[t]).sort().join(',');
+  if (seenTalkers !== lastLegendTalkers) {
+    legend.innerHTML = seenTalkers.split(',').filter(Boolean).map(t => `
+      <div class="legend-item">
+        <span class="legend-swatch" style="background:${TALKER_COLORS[t]}"></span>
+        ${TALKER_NAMES[t]}
+      </div>
+    `).join('');
+    lastLegendTalkers = seenTalkers;
+  }
+}
+
+function renderVelocityPolar(vector) {
+  const speedEl = document.getElementById('polar-speed');
+  const courseEl = document.getElementById('polar-course');
+  const noteEl = document.getElementById('polar-note');
+  const vecLine = document.getElementById('polar-vector');
+  const tip = document.getElementById('polar-tip');
+  const scaleLabel = document.getElementById('polar-scale-label');
+
+  const speed = vector?.resultant_speed_kmph;
+  const course = vector?.resultant_course_deg;
+
+  if (speed == null || course == null) {
+    speedEl.textContent = '—';
+    courseEl.textContent = '—';
+    scaleLabel.textContent = '';
+    vecLine.setAttribute('x2', 100);
+    vecLine.setAttribute('y2', 100);
+    tip.setAttribute('cx', 100);
+    tip.setAttribute('cy', 100);
+    noteEl.textContent = 'No valid course in the current window — the receiver omits heading when speed is too low to measure reliably.';
+    return;
+  }
+
+  speedEl.textContent = speed.toFixed(3);
+  courseEl.textContent = course.toFixed(0) + '°';
+
+  // Auto-ranging gauge: the outer ring always represents
+  // speed * 1.4 (never a fixed absolute scale), so the vector tip
+  // sits at a consistent, readable distance from center regardless
+  // of magnitude. The printed scale label is what carries the
+  // actual value — read that, not the needle's raw length.
+  const maxScale = Math.max(speed * 1.4, 0.02);
+  const outerRadius = 85;
+  const r = Math.min(1, speed / maxScale) * outerRadius;
+  const rad = (course * Math.PI) / 180;
+  const x = 100 + r * Math.sin(rad);
+  const y = 100 - r * Math.cos(rad);
+
+  vecLine.setAttribute('x2', x.toFixed(1));
+  vecLine.setAttribute('y2', y.toFixed(1));
+  tip.setAttribute('cx', x.toFixed(1));
+  tip.setAttribute('cy', y.toFixed(1));
+  scaleLabel.textContent = maxScale.toFixed(2) + ' km/h (outer ring)';
+
+  if (speed < STATIONARY_THRESHOLD_KMPH) {
+    noteEl.textContent = 'Below the Doppler noise floor for a stationary antenna — direction shown is not meaningful.';
+  } else {
+    noteEl.textContent = '';
+  }
+}
+
+function renderTelemetry(state) {
+  const speed = state.movement?.avg_speed_kmph ?? null;
+  const speedEl = document.getElementById('tm-speed');
+  if (speed == null) {
+    speedEl.innerHTML = '—<span class="unit">km/h</span>';
+  } else if (speed < STATIONARY_THRESHOLD_KMPH) {
+    speedEl.innerHTML = `stationary<span class="unit"> (${speed.toFixed(3)} km/h noise)</span>`;
+  } else {
+    speedEl.innerHTML = `${speed.toFixed(2)}<span class="unit">km/h</span>`;
+  }
+
+  const fix = state.fix_quality?.fix_type;
+  document.getElementById('tm-fix').textContent = FIX_LABELS[fix] || '—';
+  document.getElementById('tm-pdop').textContent = state.fix_quality?.pdop ?? '—';
+  document.getElementById('tm-hdop').textContent = state.fix_quality?.hdop ?? '—';
+  document.getElementById('tm-svcount').textContent = state.satellites?.length ?? '—';
+
+  renderSatellites(state.satellites);
+  renderVelocityPolar(state.velocity_vector);
+}
+
+function setConnBadge(status) {
+  const el = document.getElementById('conn-badge');
+  el.className = 'conn-badge ' + status;
+  el.textContent = status === 'live' ? 'live' : status === 'down' ? 'disconnected' : 'connecting…';
+}
+
+// --- WebSocket with automatic reconnect + polling fallback ---
+let ws = null;
+let pollTimer = null;
+
+function stopPolling() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/api/nmea/current');
+      renderTelemetry(await res.json());
+    } catch (e) { /* keep last known state on transient errors */ }
+  }, 2000);
+}
+
+function connectWebSocket() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws/nmea`);
+
+  ws.onopen = () => {
+    setConnBadge('live');
+    stopPolling(); // WebSocket is live, no need to also poll
+  };
+  ws.onmessage = (event) => {
+    renderTelemetry(JSON.parse(event.data));
+  };
+  ws.onclose = () => {
+    setConnBadge('down');
+    startPolling(); // keep the dashboard useful while reconnecting
+    setTimeout(connectWebSocket, 3000);
+  };
+  ws.onerror = () => {
+    ws.close();
+  };
+}
+
+refreshStatusCards();
+setInterval(refreshStatusCards, 15000);
+connectWebSocket();
+</script>
+
+</body>
+</html>

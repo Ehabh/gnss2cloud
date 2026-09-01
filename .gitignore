@@ -1,5 +1,10 @@
 .env
 rclone.conf
-data/
+data/raw/*
+data/rinex/*
+data/logs/*
+!data/raw/.gitkeep
+!data/rinex/.gitkeep
+!data/logs/.gitkeep
 *.log
 .DS_Store
