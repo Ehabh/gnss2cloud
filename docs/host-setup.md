@@ -77,7 +77,7 @@ out of the box.
  
 ### Arch Linux
  
-Three things behave differently from Ubuntu/Debian/RHEL and are worth
+Two things behave differently from Ubuntu/Debian/RHEL and are worth
 checking before assuming something's broken:
  
 1. **No `dialout` group by default.** Arch assigns serial ACM/USB
@@ -120,17 +120,6 @@ checking before assuming something's broken:
    ```
  
    If these don't match, `sudo reboot` and recheck.
- 
-3. **`docker-buildx` isn't installed by default.** The Dockerfile
-   relies on Docker's automatic `TARGETARCH` build argument
-   (`supercronic-linux-${TARGETARCH}`), which is only populated when
-   BuildKit is active. Without `docker-buildx`, `docker compose build`
-   silently falls back to the legacy builder, `TARGETARCH` resolves
-   empty, and the supercronic download 404s. Fix:
- 
-   ```bash
-   sudo pacman -S docker-buildx
-   ```
  
 Get your final `DIALOUT_GID` for `.env` with `getent group dialout`
 after completing step 1 above.
