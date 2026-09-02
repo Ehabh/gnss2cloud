@@ -337,12 +337,15 @@ configuration differs.
 
 ## Roadmap
 
+- **Configurable raw compression** (`RAW_COMPRESSION`) — let
+  users choose between `zst` (current default), `xz`, `gz`, or `none`
+  for the archived raw file, for compatibility with downstream
+  pipelines that expect a specific format.
 - **Multi-bucket scalability** — auto-detect `REMOTE_STORAGE_N`
   (currently fixed at exactly 2), with a configurable minimum to
   preserve the redundancy guarantee.
 - **ARM/Raspberry Pi validation** for the compression pipeline
   specifically (validated on x86_64 so far).
-- **`CHANGELOG.md`** tracking version history going forward.
 - **Web dashboard follow-ups** (see
   [Web dashboard](#web-dashboard-optional-monitoring-only) and
   [Known limitations](#known-limitations)):
@@ -351,16 +354,11 @@ configuration differs.
   case is now validated — see Tested status above).
 - Real authentication behind `WEB_AUTH_ENABLED`, plus activating
   the currently-inert security-event logging sink
-  (`logs/security_events.log`) — both scaffolded in anticipation of
-  **EU RED / EN 18031** conformance, in case this project's scope
-  ever changes to require it (not currently believed to apply — see
-  inline code comments in `web/app/security.py`).
+  (`logs/security_events.log`).
 - Reverse proxy + TLS/basic-auth documentation for any deployment
   beyond a trusted local network.
 - Rate limiting / max-connection cap on the WebSocket endpoint.
-- Trivy vulnerability scan covering **both** images
-  (`gnss2cloud` and `gnss2cloud-web`) — done ad hoc for a prior
-  release, not yet re-run for this branch or formalized as CI.
+
 
 ## Acknowledgments
 
@@ -374,7 +372,7 @@ RTKLIB bug investigation, and this documentation) were developed and
 reviewed with assistance from [Claude](https://claude.ai) (Anthropic),
 with additional help at various points from
 [Microsoft Copilot](https://copilot.microsoft.com),
-[Google AI Mode](https://support.google.com/websearch/answer/14901683),
+[Google AI Mode](https://support.google.com/websearch/answer/14901683), [Kimi AI](https://www.kimi.ai/)
 and Brave's [Leo](https://brave.com/leo/).
 
 ## A note on validation
