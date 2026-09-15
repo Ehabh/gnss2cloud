@@ -12,6 +12,19 @@
     and NMEA were run on separate ports with no shared-stream
     filtering relay needed). This testing surfaced and fixed three
     real bugs — see **Issues found during Septentrio testing** below.
+    Septentrio validation above was performed on **x86_64 hosts
+    (Arch Linux) and Raspberry Pi 4**. **Raspberry Pi 3B is
+    confirmed NOT compatible** with Septentrio mosaic-series USB
+    receivers (tested: ArduSimple simpleRTK3B Pro) opening the
+    primary CDC-ACM interface used for raw SBF capture causes a full
+    USB-subsystem lockup on the Pi 3B's `dwc_otg` USB controller,
+    reproduced across two separate Pi 3B units, multiple cables, and
+    with/without other USB peripherals attached. The identical
+    receiver and cable work without issue on a Raspberry Pi 4
+    (xHCI-based USB controller). See **docs/host-setup.md** for
+    detail. This does **not** affect the project's existing u-blox
+    Pi 3B validation (a simpler, non-composite USB device), which is
+    unaffected by this issue.
   - **NovAtel (OEM6/OEM7)** — implemented (RTKLIB
     supports the format, and `GNSS_FORMAT=nov` selects it, see
     [receiver-setup.md](receiver-setup.md)), but **not yet tested
