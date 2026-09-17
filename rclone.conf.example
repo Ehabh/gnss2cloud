@@ -1,0 +1,32 @@
+# Below are examples of S3-compatible storage used for rclone
+[google-drive]
+type = drive
+client_id = ://googleusercontent.com
+client_secret = [secret]
+scope = drive
+token = {""}
+
+[my-s3-bucket]
+type = s3
+provider = AWS
+access_key_id = [id]
+secret_access_key = [key]
+region = us-east-1
+
+[secure-backup]
+type = crypt
+remote = my-google-drive:backups
+password = [pass] # (obscured/encrypted string)
+
+[b2]
+type = b2
+account = YOUR_KEY_ID
+key = YOUR_APPLICATION_KEY
+
+[Other_Cloud_Provide_Name]
+type = s3
+provider = Other
+access_key_id = YOUR_ACCESS_KEY_ID
+secret_access_key = YOUR_SECRET_ACCESS_KEY
+endpoint = YOUR_ENDPOINT_URL
+acl = private
