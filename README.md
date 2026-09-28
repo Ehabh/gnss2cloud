@@ -306,6 +306,13 @@ configuration differs.
   RTKLIB format token through the pipeline, but no real NovAtel
   hardware has been run against this container. See
   `docs/receiver-setup.md`.
+- **Raspberry Pi 3B does not seem to be compatible with Septentrio USB
+  receivers.** Confirmed with an ArduSimple simpleRTK3B Pro
+  (Septentrio mosaic-X5): the Pi 3B's USB controller (`dwc_otg`)
+  locks up when the primary raw-capture serial interface is opened,
+  due to how Septentrio's receiver enumerates as a complex composite
+  USB device. A Raspberry Pi 4/5 or x86_64 host works without issue.
+  u-blox receivers on Pi 3B are unaffected.
 - **`.nav.gz` uploads one cycle late.** The upload script requires a
   file be >5 minutes old before uploading; freshly-created `.nav.gz`
   files sit right at that boundary and consistently miss the same-hour
