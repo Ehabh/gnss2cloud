@@ -21,8 +21,7 @@
     reproduced across two separate Pi 3B units, multiple cables, and
     with/without other USB peripherals attached. The identical
     receiver and cable work without issue on a Raspberry Pi 4
-    (xHCI-based USB controller). See **docs/host-setup.md** for
-    detail. This does **not** affect the project's existing u-blox
+    (xHCI-based USB controller). This does **not** affect the project's existing u-blox
     Pi 3B validation (a simpler, non-composite USB device), which is
     unaffected by this issue.
   - **NovAtel (OEM6/OEM7)** — implemented (RTKLIB
