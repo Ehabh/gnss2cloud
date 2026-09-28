@@ -43,6 +43,7 @@
 - Raw capture, RINEX conversion, and dual-cloud upload: proven on bare
   metal (Raspberry Pi 3B and a Debian mini PC) over a multi-day soak
   test, and validated end-to-end in the Docker container.
+  **Raspberry Pi 3B** worked for **u-blox** receivers only).
 - Retention, log rotation, network-resilient uploads, and health
   monitoring: each deliberately tested against real failure conditions
   (power loss, receiver disconnects, a stuck-process bug) before being
